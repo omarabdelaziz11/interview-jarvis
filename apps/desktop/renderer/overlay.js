@@ -75,7 +75,7 @@ function renderState(state) {
   const error = safeText(state.error);
   errorElement.textContent = error;
   errorRow.hidden = !error;
-  retryButton.hidden = !(error && heard);
+  retryButton.hidden = !(state.lastTurnFailed && error && heard);
 
   muteButton.textContent = state.muted ? 'Unmute' : 'Mute';
   muteButton.setAttribute('aria-pressed', String(Boolean(state.muted)));

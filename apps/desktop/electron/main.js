@@ -7,22 +7,22 @@ const { getSettings, saveSettings } = require('./settings');
 const conversation = require('./conversation');
 const openaiClient = require('./openai-client');
 const { systemFor } = require('./prompts');
+const { createListenHandlers } = require('./listen-pipeline');
 
 const MODES = new Set(['jarvis', 'interview']);
-const MAX_LISTEN_SECONDS = 180;
 const state = {
   status: 'idle',
   muted: false,
   error: null,
   heard: null,
+  lastTurnFailed: false,
 };
 
 let overlay = null;
 let settingsWindow = null;
 let quitting = false;
-let listenStartRequest = null;
-let listenTimeout = null;
 let unregisterHotkey = () => {};
+let listenHandlers = null;
 const sidecarManager = new SidecarManager();
 sidecarManager.onStatus(({ status }) => {
   if (status === 'failed') {
@@ -62,65 +62,32 @@ function showSidecarError(message) {
   sendState();
 }
 
-function clearListenTimeout() {
-  if (listenTimeout) {
-    clearTimeout(listenTimeout);
-    listenTimeout = null;
-  }
-}
-
-async function startListen() {
-  if (state.status !== 'idle' && state.status !== 'error') return;
-
-  clearListenTimeout();
-  state.status = 'listening';
-  state.error = null;
-  state.heard = null;
-  sendState();
-
-  const settings = getSettings();
-  const request = sidecarClient.listenStart({
-    mic_device_id: settings.micDeviceId,
-    loopback_device_id: settings.loopbackDeviceId,
-    max_seconds: MAX_LISTEN_SECONDS,
+function ensureListenHandlers() {
+  if (listenHandlers) return listenHandlers;
+  listenHandlers = createListenHandlers(state, {
+    sidecarClient,
+    getSettings,
+    sendState,
+    showSidecarError,
+    runTurn,
   });
-  listenStartRequest = request;
-
-  try {
-    await request;
-    if (state.status === 'listening') {
-      listenTimeout = setTimeout(() => void stopListen(), MAX_LISTEN_SECONDS * 1000);
-    }
-  } catch {
-    showSidecarError('Could not start listening. Check the local audio service.');
-  } finally {
-    if (listenStartRequest === request) listenStartRequest = null;
-  }
+  return listenHandlers;
 }
 
-async function stopListen() {
-  if (state.status !== 'listening') return;
+function startListen() {
+  return ensureListenHandlers().startListen();
+}
 
-  state.status = 'thinking';
-  state.error = null;
-  clearListenTimeout();
-  sendState();
-
-  try {
-    if (listenStartRequest) await listenStartRequest;
-    const result = await sidecarClient.listenStop();
-    await runTurn(result?.text);
-  } catch {
-    showSidecarError('Could not stop listening. Check the local audio service.');
-  }
+function stopListen() {
+  return ensureListenHandlers().stopListen();
 }
 
 function toggleListen() {
-  if (state.status === 'listening') {
-    void stopListen();
-  } else if (state.status === 'idle' || state.status === 'error') {
-    void startListen();
-  }
+  ensureListenHandlers().toggleListen();
+}
+
+function clearListenTimeout() {
+  ensureListenHandlers().clearListenTimeout();
 }
 
 function nativeHotkeyBinding(accelerator, UiohookKey) {
@@ -208,11 +175,16 @@ function registerConfiguredHotkey() {
   unregisterHotkey = () => globalShortcut.unregister(settings.hotkey);
 }
 
+function shouldAppendUser(text) {
+  const lastMessage = conversation.getMessages().at(-1);
+  return !(lastMessage?.role === 'user' && lastMessage.content === text);
+}
+
 async function runTurn(transcript) {
   const text = typeof transcript === 'string' ? transcript.trim() : '';
-  const retrying = state.status === 'error' && Boolean(state.error) && state.heard === text;
   state.status = 'thinking';
   state.error = null;
+  state.lastTurnFailed = false;
   sendState();
 
   if (!text) {
@@ -224,7 +196,7 @@ async function runTurn(transcript) {
   }
 
   state.heard = text;
-  if (!retrying) conversation.appendUser(text);
+  if (shouldAppendUser(text)) conversation.appendUser(text);
   sendState();
 
   try {
@@ -244,13 +216,16 @@ async function runTurn(transcript) {
     }
 
     conversation.appendAssistant(answer);
+    // Task 8 will set status to 'speaking' when TTS plays; idle is correct until then.
     state.status = 'idle';
     state.error = null;
+    state.lastTurnFailed = false;
     sendState();
     return answer;
   } catch {
     state.status = 'error';
     state.error = 'Could not get an answer. Check Settings and try again.';
+    state.lastTurnFailed = true;
     sendState();
     return null;
   }
@@ -287,6 +262,7 @@ function registerIpcHandlers() {
     conversation.clear();
     state.error = null;
     state.heard = null;
+    state.lastTurnFailed = false;
     sendState();
     return stateSnapshot();
   });
@@ -319,7 +295,7 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle('retry-turn', async (event) => {
-    if (!isOverlaySender(event) || !state.error || !state.heard) return false;
+    if (!isOverlaySender(event) || !state.lastTurnFailed || !state.heard) return false;
     await runTurn(state.heard);
     return true;
   });
