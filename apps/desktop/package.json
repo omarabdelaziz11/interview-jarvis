@@ -4,7 +4,8 @@
   "private": true,
   "main": "electron/main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "test:sidecar-manager": "node --test electron/sidecar-manager.test.js"
   },
   "devDependencies": {
     "electron": "^44.3.0"

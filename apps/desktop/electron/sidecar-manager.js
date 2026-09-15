@@ -17,11 +17,15 @@ class SidecarManager {
     this.client = options.client || sidecarClient;
     this.settingsProvider = options.settingsProvider || getSettings;
     this.spawnProcess = options.spawnProcess || spawn;
+    this.delayFn = options.delayFn || delay;
+    this.healthIntervalMs = options.healthIntervalMs ?? HEALTH_INTERVAL_MS;
     this.sidecarDir =
       options.sidecarDir || path.resolve(__dirname, '..', '..', '..', 'services', 'sidecar');
     this.process = null;
     this.restartTimer = null;
+    this.healthPollTimer = null;
     this.restartCount = 0;
+    this.recovering = false;
     this.stopping = true;
     this.statusListeners = new Set();
   }
@@ -50,7 +54,50 @@ class SidecarManager {
     }
     this.stopping = false;
     this.restartCount = 0;
+    this.recovering = false;
     this.spawn();
+    this.startHealthPolling();
+  }
+
+  startHealthPolling() {
+    this.stopHealthPolling();
+    if (this.stopping) return;
+    this.healthPollTimer = setInterval(() => {
+      void this.pollHealth();
+    }, this.healthIntervalMs);
+  }
+
+  stopHealthPolling() {
+    if (this.healthPollTimer) {
+      clearInterval(this.healthPollTimer);
+      this.healthPollTimer = null;
+    }
+  }
+
+  async pollHealth() {
+    if (this.stopping || this.restartTimer || this.recovering) return;
+
+    try {
+      const result = await this.client.health();
+      if (result?.ok) {
+        this.restartCount = 0;
+        this.recovering = false;
+        this.emitStatus('healthy', { health: result });
+        return;
+      }
+    } catch {
+      // Fall through to recovery when the sidecar is unreachable or unhealthy.
+    }
+
+    if (this.stopping || this.restartTimer || this.recovering) return;
+
+    if (this.process) {
+      this.recovering = true;
+      this.process.kill();
+      return;
+    }
+
+    this.scheduleRestart({ reason: 'health_check_failed' });
   }
 
   spawn() {
@@ -64,6 +111,7 @@ class SidecarManager {
       windowsHide: true,
     });
     this.process = child;
+    this.recovering = false;
     this.emitStatus('starting');
 
     let handledExit = false;
@@ -71,6 +119,7 @@ class SidecarManager {
       if (handledExit) return;
       handledExit = true;
       if (this.process === child) this.process = null;
+      this.recovering = false;
       if (this.stopping) {
         this.emitStatus('stopped');
         return;
@@ -83,6 +132,7 @@ class SidecarManager {
   }
 
   scheduleRestart(detail) {
+    if (this.restartTimer) return;
     if (this.restartCount >= MAX_RESTARTS) {
       this.emitStatus('failed', detail);
       return;
@@ -110,6 +160,8 @@ class SidecarManager {
       try {
         const result = await this.client.health();
         if (result?.ok) {
+          this.restartCount = 0;
+          this.recovering = false;
           this.emitStatus('healthy', { health: result });
           return result;
         }
@@ -117,7 +169,7 @@ class SidecarManager {
       } catch (error) {
         lastError = error;
       }
-      await delay(Math.min(HEALTH_INTERVAL_MS, Math.max(0, deadline - Date.now())));
+      await this.delayFn(Math.min(this.healthIntervalMs, Math.max(0, deadline - Date.now())));
     }
 
     throw new Error('Sidecar did not become healthy within the startup timeout', {
@@ -127,6 +179,8 @@ class SidecarManager {
 
   async stop() {
     this.stopping = true;
+    this.recovering = false;
+    this.stopHealthPolling();
     if (this.restartTimer) {
       clearTimeout(this.restartTimer);
       this.restartTimer = null;
@@ -151,4 +205,4 @@ class SidecarManager {
   }
 }
 
-module.exports = { SidecarManager };
+module.exports = { SidecarManager, HEALTH_INTERVAL_MS, MAX_RESTARTS };
