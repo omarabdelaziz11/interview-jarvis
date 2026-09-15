@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Jarvis Overlay</title>
+    <link rel="stylesheet" href="./overlay.css" />
+    <script src="./overlay.js" defer></script>
+  </head>
+  <body>
+    <main class="overlay" aria-label="Jarvis assistant">
+      <header class="header">
+        <div>
+          <p class="eyebrow">Jarvis</p>
+          <div class="status">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span id="status-text">Idle</span>
+          </div>
+        </div>
+        <div class="mode-switch" role="group" aria-label="Assistant mode">
+          <button class="mode-chip active" type="button" data-mode="jarvis">Jarvis</button>
+          <button class="mode-chip" type="button" data-mode="interview">Interview</button>
+        </div>
+      </header>
+
+      <section class="heard" id="heard" aria-live="polite" hidden>
+        <span>Heard</span>
+        <p id="heard-text"></p>
+      </section>
+
+      <section class="messages" id="messages" aria-label="Conversation" aria-live="polite">
+        <div class="empty-state" id="empty-state">
+          <p>Ready when you are.</p>
+          <span>Your conversation will appear here.</span>
+        </div>
+      </section>
+
+      <p class="error" id="error" role="alert" hidden></p>
+
+      <footer class="controls">
+        <button type="button" id="mute-button" aria-pressed="false">Mute</button>
+        <button type="button" id="clear-button">Clear</button>
+        <button type="button" id="copy-button">Copy</button>
+        <button type="button" id="hide-button">Hide</button>
+      </footer>
+    </main>
+  </body>
+</html>

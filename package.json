@@ -1,0 +1,8 @@
+{
+  "name": "jarvis-overlay",
+  "private": true,
+  "scripts": {
+    "desktop": "npm --prefix apps/desktop start",
+    "sidecar": "cd services/sidecar && .venv/Scripts/python -m app.main"
+  }
+}

@@ -1,0 +1,237 @@
+:root {
+  color-scheme: dark;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+body {
+  padding: 8px;
+  color: #edf4f3;
+}
+
+button {
+  font: inherit;
+}
+
+.overlay {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid rgb(148 180 177 / 22%);
+  border-radius: 18px;
+  background: rgb(20 25 26 / 92%);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 32%);
+  backdrop-filter: blur(18px);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 18px 14px;
+  border-bottom: 1px solid rgb(255 255 255 / 7%);
+  -webkit-app-region: drag;
+}
+
+.eyebrow {
+  margin: 0 0 5px;
+  color: #9bacaa;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #55bdb1;
+}
+
+.overlay[data-status="error"] .status-dot {
+  background: #f08080;
+}
+
+.overlay[data-status="listening"] .status-dot,
+.overlay[data-status="thinking"] .status-dot {
+  box-shadow: 0 0 0 4px rgb(85 189 177 / 13%);
+}
+
+.mode-switch {
+  display: flex;
+  padding: 3px;
+  border: 1px solid rgb(255 255 255 / 7%);
+  border-radius: 9px;
+  background: rgb(0 0 0 / 18%);
+  -webkit-app-region: no-drag;
+}
+
+.mode-chip {
+  border: 0;
+  border-radius: 6px;
+  padding: 6px 9px;
+  background: transparent;
+  color: #899a98;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.mode-chip.active {
+  background: #d6ebe8;
+  color: #172221;
+}
+
+.heard {
+  margin: 13px 16px 0;
+  padding: 10px 12px;
+  border-left: 2px solid #55bdb1;
+  border-radius: 0 8px 8px 0;
+  background: rgb(85 189 177 / 7%);
+}
+
+.heard span {
+  color: #7f9c98;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.heard p {
+  margin: 4px 0 0;
+  overflow: hidden;
+  color: #c9d4d3;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.messages {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 15px 16px;
+  scrollbar-color: #40504e transparent;
+  scrollbar-width: thin;
+}
+
+.empty-state {
+  display: grid;
+  height: 100%;
+  min-height: 120px;
+  place-content: center;
+  text-align: center;
+}
+
+.empty-state p {
+  margin: 0 0 5px;
+  color: #cad5d3;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.empty-state span {
+  color: #71807e;
+  font-size: 11px;
+}
+
+.message {
+  margin-bottom: 13px;
+}
+
+.message:last-child {
+  margin-bottom: 0;
+}
+
+.message-role {
+  display: block;
+  margin-bottom: 4px;
+  color: #73918d;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.message p {
+  margin: 0;
+  color: #dce5e4;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.message[data-role="user"] p {
+  color: #9facaa;
+}
+
+.error {
+  margin: 0 16px 10px;
+  color: #f0a0a0;
+  font-size: 11px;
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 7px;
+  padding: 11px 12px 12px;
+  border-top: 1px solid rgb(255 255 255 / 7%);
+}
+
+.controls button {
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-radius: 8px;
+  padding: 8px 5px;
+  background: rgb(255 255 255 / 4%);
+  color: #aebcba;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.controls button:hover,
+.controls button:focus-visible {
+  border-color: rgb(85 189 177 / 45%);
+  background: rgb(85 189 177 / 9%);
+  color: #e3efed;
+  outline: none;
+}
+
+.controls button[aria-pressed="true"] {
+  border-color: rgb(240 128 128 / 35%);
+  color: #efaaaa;
+}
+
+button:focus-visible {
+  outline: 2px solid #70c9bf;
+  outline-offset: 2px;
+}
