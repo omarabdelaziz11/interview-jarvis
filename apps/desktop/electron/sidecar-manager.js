@@ -1,4 +1,5 @@
 const { spawn } = require('child_process');
+const crypto = require('crypto');
 const path = require('path');
 
 const sidecarClient = require('./sidecar-client');
@@ -33,6 +34,7 @@ class SidecarManager {
     this.recovering = false;
     this.stopping = true;
     this.statusListeners = new Set();
+    this.authToken = '';
   }
 
   onStatus(callback) {
@@ -113,9 +115,17 @@ class SidecarManager {
     if (this.stopping || this.process) return;
 
     const settings = this.settingsProvider();
+    this.authToken = crypto.randomBytes(24).toString('hex');
+    if (typeof this.client.setAuthToken === 'function') {
+      this.client.setAuthToken(this.authToken);
+    }
     const child = this.spawnProcess(settings.sidecarPython, ['-m', 'app.main'], {
       cwd: this.sidecarDir,
-      env: { ...process.env, WHISPER_MODEL: settings.whisperModel },
+      env: {
+        ...process.env,
+        WHISPER_MODEL: settings.whisperModel,
+        JARVIS_SIDECAR_TOKEN: this.authToken,
+      },
       stdio: 'ignore',
       windowsHide: true,
     });

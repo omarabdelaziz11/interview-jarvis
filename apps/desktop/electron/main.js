@@ -7,10 +7,11 @@ const { getSettings, saveSettings } = require('./settings');
 const { toPublicSettings } = require('./public-settings');
 const conversation = require('./conversation');
 const openaiClient = require('./openai-client');
-const { systemFor } = require('./prompts');
+const { systemFor, systemForScreenScan } = require('./prompts');
 const { createListenHandlers } = require('./listen-pipeline');
 const { OVERLAY_ERRORS, openAiErrorMessage } = require('./errors');
 const tts = require('./tts');
+const { capturePrimaryScreenPngDataUrl } = require('./screen-capture');
 
 /** Text-only mode: TTS UI removed; keep false until speech is productized again. */
 const TTS_ENABLED = false;
@@ -48,6 +49,7 @@ function stateSnapshot() {
     ...state,
     mode: conversation.getMode(),
     messages: conversation.getMessages(),
+    listeningArmed: Boolean(listenHandlers?.isContinuousSessionActive?.()),
   };
 }
 
@@ -164,6 +166,75 @@ function toggleContinuousSession() {
   showOverlay();
   if (state.status === 'speaking') stopSpeech();
   ensureListenHandlers().toggleContinuousSession();
+  sendState();
+}
+
+function activateListenControl() {
+  showOverlay();
+  if (state.status === 'speaking') stopSpeech();
+  const settings = getSettings();
+  if (settings.pressStyle === 'toggle') {
+    ensureListenHandlers().toggleListen();
+  } else {
+    // continuous (default) and hold-from-button both use session toggle
+    ensureListenHandlers().toggleContinuousSession();
+  }
+  sendState();
+}
+
+async function scanPrimaryScreen() {
+  if (conversation.getMode() !== 'interview') {
+    return false;
+  }
+  if (state.status === 'thinking') {
+    return false;
+  }
+
+  showOverlay();
+  state.status = 'thinking';
+  state.error = null;
+  state.lastTurnFailed = false;
+  state.heard = 'Screen scan';
+  sendState();
+
+  try {
+    const settings = getSettings();
+    if (!settings.apiKey) {
+      throw new Error('Missing API key');
+    }
+
+    const { dataUrl } = await capturePrimaryScreenPngDataUrl();
+    const client = openaiClient.createClient(settings.apiKey);
+    const answer = await openaiClient.chatWithImage(client, {
+      // Vision-capable mini model (settings.model may be text-only)
+      model: 'gpt-4o-mini',
+      system: systemForScreenScan(),
+      prompt:
+        'Read the entire screenshot, including sidebars and numbered question lists. Answer every interview question you can see. If there are multiple, number the answers to match the on-screen numbering. Reply with only the answers.',
+      dataUrl,
+    });
+
+    if (!answer) {
+      throw new Error('Empty OpenAI response');
+    }
+
+    conversation.appendUser('[Screen scan]');
+    conversation.appendAssistant(answer);
+    state.error = null;
+    state.lastTurnFailed = false;
+    state.status = 'idle';
+    sendState();
+    return true;
+  } catch (error) {
+    state.status = 'error';
+    const detail = String(error?.message || '');
+    state.error = /screen capture|empty image|sources/i.test(detail)
+      ? 'Could not capture the screen. Check Windows screen-capture permission.'
+      : openAiErrorMessage(error);
+    state.lastTurnFailed = false;
+    sendState();
+    return false;
+  }
 }
 
 function clearListenTimeout() {
@@ -390,6 +461,23 @@ function registerIpcHandlers() {
     return true;
   });
 
+  ipcMain.handle('quit-app', (event) => {
+    if (!isOverlaySender(event)) return false;
+    app.quit();
+    return true;
+  });
+
+  ipcMain.handle('toggle-listen', (event) => {
+    if (!isOverlaySender(event)) return stateSnapshot();
+    activateListenControl();
+    return stateSnapshot();
+  });
+
+  ipcMain.handle('scan-screen', async (event) => {
+    if (!isOverlaySender(event)) return false;
+    return scanPrimaryScreen();
+  });
+
   ipcMain.handle('open-settings', (event) => {
     if (!isOverlaySender(event)) return false;
     createSettingsWindow();
@@ -432,13 +520,20 @@ function registerIpcHandlers() {
   });
 }
 
-function secureWebPreferences() {
+function secureWebPreferences(preloadFile = 'preload.js') {
   return {
-    preload: path.join(__dirname, 'preload.js'),
+    preload: path.join(__dirname, preloadFile),
     contextIsolation: true,
     nodeIntegration: false,
     sandbox: true,
   };
+}
+
+function lockWindowNavigation(win) {
+  win.webContents.on('will-navigate', (event) => {
+    event.preventDefault();
+  });
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 }
 
 function createOverlay() {
@@ -462,6 +557,7 @@ function createOverlay() {
   overlay.setAlwaysOnTop(true, 'screen-saver');
   overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   overlay.setContentProtection(true);
+  lockWindowNavigation(overlay);
   overlay.webContents.on('did-finish-load', () => {
     sendState();
     overlay.show();
@@ -490,6 +586,8 @@ function createSettingsWindow() {
     webPreferences: secureWebPreferences(),
   });
   settingsWindow.setMenuBarVisibility(false);
+  settingsWindow.setContentProtection(true);
+  lockWindowNavigation(settingsWindow);
   settingsWindow.webContents.on('did-finish-load', () => settingsWindow?.show());
   settingsWindow.on('closed', () => {
     settingsWindow = null;

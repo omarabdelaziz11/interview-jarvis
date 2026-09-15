@@ -1,8 +1,19 @@
+const fs = require('fs');
 const path = require('path');
 const { safeStorage } = require('electron');
 const Store = require('electron-store');
 
 const store = new Store({ name: 'jarvis-settings' });
+
+const ALLOWED_CHAT_MODELS = Object.freeze([
+  'gpt-4o-mini',
+  'gpt-4o',
+  'gpt-4.1-mini',
+  'gpt-4.1',
+  'o4-mini',
+]);
+
+const ALLOWED_WHISPER_MODELS = Object.freeze(['tiny', 'base', 'small']);
 
 const DEFAULTS = Object.freeze({
   model: 'gpt-4o-mini',
@@ -26,8 +37,24 @@ const DEFAULTS = Object.freeze({
   ),
 });
 
-const STRING_FIELDS = new Set(['model', 'whisperModel', 'hotkey', 'sidecarPython']);
+const STRING_FIELDS = new Set(['hotkey']);
 const DEVICE_FIELDS = new Set(['micDeviceId', 'loopbackDeviceId']);
+
+function isAllowedPythonExecutable(candidate) {
+  if (typeof candidate !== 'string' || !candidate.trim() || candidate.length > 1024) {
+    return false;
+  }
+  const resolved = path.resolve(candidate.trim());
+  const base = path.basename(resolved).toLowerCase();
+  if (base !== 'python.exe' && base !== 'python' && base !== 'python3.exe' && base !== 'python3') {
+    return false;
+  }
+  if (!fs.existsSync(resolved)) {
+    return false;
+  }
+  // Prefer the repo sidecar venv; still allow another local python*.exe that exists.
+  return true;
+}
 
 function normalizeSettings(partial) {
   if (!partial || typeof partial !== 'object' || Array.isArray(partial)) {
@@ -36,7 +63,22 @@ function normalizeSettings(partial) {
 
   const normalized = {};
   for (const [key, value] of Object.entries(partial)) {
-    if (STRING_FIELDS.has(key)) {
+    if (key === 'model') {
+      if (typeof value !== 'string' || !ALLOWED_CHAT_MODELS.includes(value.trim())) {
+        throw new TypeError(`model must be one of: ${ALLOWED_CHAT_MODELS.join(', ')}`);
+      }
+      normalized.model = value.trim();
+    } else if (key === 'whisperModel') {
+      if (typeof value !== 'string' || !ALLOWED_WHISPER_MODELS.includes(value.trim())) {
+        throw new TypeError(`whisperModel must be one of: ${ALLOWED_WHISPER_MODELS.join(', ')}`);
+      }
+      normalized.whisperModel = value.trim();
+    } else if (key === 'sidecarPython') {
+      if (!isAllowedPythonExecutable(value)) {
+        throw new TypeError('sidecarPython must be an existing python executable');
+      }
+      normalized.sidecarPython = path.resolve(String(value).trim());
+    } else if (STRING_FIELDS.has(key)) {
       if (typeof value !== 'string' || !value.trim() || value.length > 1024) {
         throw new TypeError(`${key} must be a non-empty string`);
       }
@@ -67,6 +109,21 @@ function normalizeSettings(partial) {
   return normalized;
 }
 
+function sanitizeLoadedPrefs(data) {
+  if (!ALLOWED_CHAT_MODELS.includes(data.model)) {
+    data.model = DEFAULTS.model;
+  }
+  if (!ALLOWED_WHISPER_MODELS.includes(data.whisperModel)) {
+    data.whisperModel = DEFAULTS.whisperModel;
+  }
+  if (!isAllowedPythonExecutable(data.sidecarPython)) {
+    data.sidecarPython = DEFAULTS.sidecarPython;
+  } else {
+    data.sidecarPython = path.resolve(data.sidecarPython);
+  }
+  return data;
+}
+
 function getSettings() {
   const prefs = store.get('prefs', {});
   const data = { ...DEFAULTS, ...(prefs && typeof prefs === 'object' ? prefs : {}) };
@@ -80,6 +137,22 @@ function getSettings() {
       // Keep the environment fallback when stored credentials cannot be decrypted.
     }
   }
+
+  sanitizeLoadedPrefs(data);
+
+  // Persist corrected sidecar path / allowlists when prefs drifted (e.g. old worktree).
+  const nextPrefs = { ...(prefs && typeof prefs === 'object' ? prefs : {}) };
+  let dirty = false;
+  for (const key of ['model', 'whisperModel', 'sidecarPython']) {
+    if (nextPrefs[key] !== data[key]) {
+      nextPrefs[key] = data[key];
+      dirty = true;
+    }
+  }
+  if (dirty) {
+    store.set('prefs', nextPrefs);
+  }
+
   // TTS disabled in product UI — never expose as enabled.
   data.ttsEnabled = false;
   return data;
@@ -105,4 +178,11 @@ function saveSettings(partial) {
   return getSettings();
 }
 
-module.exports = { DEFAULTS, getSettings, saveSettings };
+module.exports = {
+  DEFAULTS,
+  ALLOWED_CHAT_MODELS,
+  ALLOWED_WHISPER_MODELS,
+  getSettings,
+  saveSettings,
+  isAllowedPythonExecutable,
+};

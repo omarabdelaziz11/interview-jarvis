@@ -100,6 +100,39 @@ button {
   -webkit-app-region: no-drag;
 }
 
+.header-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  -webkit-app-region: no-drag;
+}
+
+.close-button {
+  display: grid;
+  place-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-radius: 8px;
+  padding: 0;
+  background: rgb(255 255 255 / 4%);
+  color: #aebcba;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1;
+  -webkit-app-region: no-drag;
+}
+
+.close-button:hover,
+.close-button:focus-visible {
+  border-color: rgb(240 128 128 / 45%);
+  background: rgb(240 128 128 / 12%);
+  color: #efaaaa;
+  outline: none;
+}
+
 .mode-chip {
   border: 0;
   border-radius: 6px;
@@ -250,11 +283,21 @@ button {
 
 .controls {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
   gap: 7px;
   padding: 11px 12px 12px;
   border-top: 1px solid rgb(255 255 255 / 7%);
   align-content: start;
+}
+
+.controls button[aria-pressed="true"] {
+  border-color: rgb(85 189 177 / 45%);
+  background: rgb(85 189 177 / 12%);
+  color: #d7efeb;
+}
+
+.controls button[hidden] {
+  display: none;
 }
 
 .controls button {

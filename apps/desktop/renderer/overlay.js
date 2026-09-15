@@ -8,6 +8,8 @@ const errorRow = document.querySelector('#error-row');
 const errorElement = document.querySelector('#error');
 const retryButton = document.querySelector('#retry-button');
 const muteButton = document.querySelector('#mute-button'); // null while TTS UI is disabled
+const listenButton = document.querySelector('#listen-button');
+const scanButton = document.querySelector('#scan-button');
 const copyButton = document.querySelector('#copy-button');
 const brandLabel = document.querySelector('#brand-label');
 const modeButtons = [...document.querySelectorAll('[data-mode]')];
@@ -95,6 +97,21 @@ function renderState(state) {
     brandLabel.textContent = currentMode === 'interview' ? 'Interview' : 'Jarvis';
   }
 
+  if (scanButton) {
+    scanButton.hidden = currentMode !== 'interview';
+    scanButton.disabled = status === 'thinking';
+  }
+
+  if (listenButton) {
+    const armed =
+      Boolean(state.listeningArmed) ||
+      status === 'listening' ||
+      status === 'transcribing';
+    listenButton.setAttribute('aria-pressed', String(armed));
+    listenButton.textContent = armed ? 'Listening' : 'Listen';
+    listenButton.disabled = status === 'thinking';
+  }
+
   for (const button of modeButtons) {
     const active = button.dataset.mode === currentMode;
     button.classList.toggle('active', active);
@@ -163,6 +180,9 @@ for (const button of modeButtons) {
     if (brandLabel) {
       brandLabel.textContent = mode === 'interview' ? 'Interview' : 'Jarvis';
     }
+    if (scanButton) {
+      scanButton.hidden = mode !== 'interview';
+    }
     void invoke(() => window.jarvis.setMode(mode));
   };
   button.addEventListener('mousedown', (event) => {
@@ -174,6 +194,12 @@ for (const button of modeButtons) {
 if (muteButton) {
   muteButton.addEventListener('click', () => invoke(window.jarvis.toggleMute));
 }
+if (listenButton) {
+  listenButton.addEventListener('click', () => invoke(window.jarvis.toggleListen));
+}
+if (scanButton) {
+  scanButton.addEventListener('click', () => invoke(window.jarvis.scanScreen));
+}
 document
   .querySelector('#clear-button')
   .addEventListener('click', () => invoke(window.jarvis.clearConversation));
@@ -183,6 +209,7 @@ document
   .querySelector('#settings-button')
   .addEventListener('click', () => invoke(window.jarvis.openSettings));
 document.querySelector('#hide-button').addEventListener('click', () => invoke(window.jarvis.hide));
+document.querySelector('#close-button').addEventListener('click', () => invoke(window.jarvis.quit));
 
 window.jarvis.onState(renderState);
 window.jarvis.onPlayAudio(playAudio);

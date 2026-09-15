@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Jarvis Overlay</title>
@@ -21,9 +21,20 @@
             <span id="status-text">Idle</span>
           </div>
         </div>
-        <div class="mode-switch" role="group" aria-label="Assistant mode">
-          <button class="mode-chip active" type="button" data-mode="jarvis">Jarvis</button>
-          <button class="mode-chip" type="button" data-mode="interview">Interview</button>
+        <div class="header-actions">
+          <div class="mode-switch" role="group" aria-label="Assistant mode">
+            <button class="mode-chip active" type="button" data-mode="jarvis">Jarvis</button>
+            <button class="mode-chip" type="button" data-mode="interview">Interview</button>
+          </div>
+          <button
+            type="button"
+            id="close-button"
+            class="close-button"
+            aria-label="Quit app"
+            title="Quit"
+          >
+            ×
+          </button>
         </div>
       </header>
 
@@ -44,10 +55,12 @@
         <button type="button" id="retry-button" hidden>Retry</button>
       </div>
 
-      <footer class="controls">
+      <footer class="controls" id="controls">
         <!-- TTS disabled for now — Mute only controlled speech playback
         <button type="button" id="mute-button" aria-pressed="false">Mute</button>
         -->
+        <button type="button" id="listen-button" aria-pressed="false">Listen</button>
+        <button type="button" id="scan-button" hidden>Scan screen</button>
         <button type="button" id="clear-button">Clear</button>
         <button type="button" id="copy-button">Copy</button>
         <button type="button" id="settings-button">Settings</button>

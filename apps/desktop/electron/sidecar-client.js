@@ -2,6 +2,20 @@ const BASE_URL = 'http://127.0.0.1:8765';
 const DEFAULT_TIMEOUT_MS = 15_000;
 const STOP_TIMEOUT_MS = 120_000;
 
+let authToken = '';
+
+function setAuthToken(token) {
+  authToken = typeof token === 'string' ? token.trim() : '';
+}
+
+function authHeaders(extra = undefined) {
+  const headers = extra ? { ...extra } : {};
+  if (authToken) {
+    headers.Authorization = `Bearer ${authToken}`;
+  }
+  return Object.keys(headers).length ? headers : undefined;
+}
+
 async function request(pathname, { method = 'GET', body, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -9,7 +23,9 @@ async function request(pathname, { method = 'GET', body, timeoutMs = DEFAULT_TIM
   try {
     const response = await fetch(`${BASE_URL}${pathname}`, {
       method,
-      headers: body === undefined ? undefined : { 'content-type': 'application/json' },
+      headers: authHeaders(
+        body === undefined ? undefined : { 'content-type': 'application/json' },
+      ),
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: controller.signal,
     });
@@ -57,6 +73,7 @@ function listenStatus() {
 
 module.exports = {
   BASE_URL,
+  setAuthToken,
   health,
   devices,
   listenStart,

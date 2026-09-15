@@ -28,7 +28,13 @@
           </label>
           <label>
             Chat model
-            <input id="model" type="text" required maxlength="200" spellcheck="false" />
+            <select id="model" required>
+              <option value="gpt-4o-mini">gpt-4o-mini</option>
+              <option value="gpt-4o">gpt-4o</option>
+              <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+              <option value="gpt-4.1">gpt-4.1</option>
+              <option value="o4-mini">o4-mini</option>
+            </select>
           </label>
           <label>
             Default mode
@@ -74,8 +80,13 @@
           <p class="hint">Interview mode uses system audio only (Speakers/Headphones Loopback). Jarvis mode can use mic + system audio.</p>
           <label>
             Whisper model
-            <input id="whisper-model" type="text" required maxlength="200" spellcheck="false" />
+            <select id="whisper-model" required>
+              <option value="tiny">tiny (~75 MB)</option>
+              <option value="base">base (~150 MB)</option>
+              <option value="small">small (~465 MB, recommended)</option>
+            </select>
           </label>
+          <p class="hint">Larger Whisper models improve accuracy but use more disk and RAM. Models download on first use.</p>
           <label>
             Python executable
             <input id="sidecar-python" type="text" required maxlength="1024" spellcheck="false" />

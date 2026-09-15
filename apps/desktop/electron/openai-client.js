@@ -17,4 +17,27 @@ async function chat(client, { model, system, messages }) {
   return response.choices[0]?.message?.content?.trim() || '';
 }
 
-module.exports = { createClient, chat };
+async function chatWithImage(client, { model, system, prompt, dataUrl }) {
+  if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) {
+    throw new TypeError('dataUrl must be an image data URL');
+  }
+
+  const response = await client.chat.completions.create({
+    model,
+    messages: [
+      { role: 'system', content: system },
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: prompt },
+          { type: 'image_url', image_url: { url: dataUrl, detail: 'high' } },
+        ],
+      },
+    ],
+    temperature: 0.4,
+  });
+
+  return response.choices[0]?.message?.content?.trim() || '';
+}
+
+module.exports = { createClient, chat, chatWithImage };
