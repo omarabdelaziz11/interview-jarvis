@@ -1,6 +1,14 @@
+import time
+
 import numpy as np
 
-from app.audio_capture import mix_streams, mix_to_mono
+from app.audio_capture import (
+    SAMPLE_RATE,
+    AudioSession,
+    mix_streams,
+    mix_to_mono,
+    resample_audio,
+)
 
 
 def test_mix_to_mono_averages_channels():
@@ -29,3 +37,28 @@ def test_mix_streams_uses_shortest_buffer_and_clips():
         mixed,
         np.array([1.0, -1.0], dtype=np.float32),
     )
+
+
+def test_resample_audio_converts_device_rate_to_whisper_rate():
+    audio = np.linspace(-1.0, 1.0, 480, dtype=np.float32)
+
+    resampled = resample_audio(audio, source_rate=48000)
+
+    assert resampled.dtype == np.float32
+    assert len(resampled) == 160
+
+
+def test_auto_stop_stashes_audio_until_stop_consumes_it():
+    session = AudioSession()
+    captured = np.array([[0.1], [0.2], [0.3]], dtype=np.float32)
+    session._recording = True
+    session._started_at = time.time() - 0.1
+    session._mic_sample_rate = SAMPLE_RATE
+    session._mic_chunks = [captured]
+
+    session._auto_stop()
+    audio, sample_rate, duration = session.stop()
+
+    np.testing.assert_array_equal(audio, captured[:, 0])
+    assert sample_rate == SAMPLE_RATE
+    assert duration > 0

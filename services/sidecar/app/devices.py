@@ -1,9 +1,16 @@
 import sounddevice as sd
 
+from app.audio_capture import PYAUDIO_DEVICE_PREFIX
 from app.schema import DeviceInfo, DevicesResponse
 
 
 def list_devices() -> DevicesResponse:
+    devices = _list_sounddevice_inputs()
+    devices.extend(_list_wasapi_loopbacks())
+    return DevicesResponse(devices=devices)
+
+
+def _list_sounddevice_inputs() -> list[DeviceInfo]:
     devices: list[DeviceInfo] = []
     hostapis = sd.query_hostapis()
     wasapi_index = next(
@@ -39,4 +46,27 @@ def list_devices() -> DevicesResponse:
             )
         )
 
-    return DevicesResponse(devices=devices)
+    return devices
+
+
+def _list_wasapi_loopbacks() -> list[DeviceInfo]:
+    try:
+        import pyaudiowpatch as pyaudio
+    except ImportError:
+        return []
+
+    client = pyaudio.PyAudio()
+    try:
+        # PyAudioWPatch creates input-capable duplicates of WASAPI render
+        # endpoints, so these IDs can capture default speakers directly.
+        return [
+            DeviceInfo(
+                id=f"{PYAUDIO_DEVICE_PREFIX}{int(device['index'])}",
+                name=str(device["name"]),
+                kind="loopback",
+            )
+            for device in client.get_loopback_device_info_generator()
+            if int(device.get("maxInputChannels", 0)) > 0
+        ]
+    finally:
+        client.terminate()

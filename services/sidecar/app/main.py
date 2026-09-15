@@ -26,16 +26,8 @@ def devices() -> DevicesResponse:
 def listen_start(body: StartListenRequest) -> dict[str, str]:
     try:
         SESSION.start(
-            mic_device_id=(
-                body.mic_device_id
-                if isinstance(body.mic_device_id, int)
-                else None
-            ),
-            loopback_device_id=(
-                body.loopback_device_id
-                if isinstance(body.loopback_device_id, int)
-                else None
-            ),
+            mic_device_id=body.mic_device_id,
+            loopback_device_id=body.loopback_device_id,
             max_seconds=body.max_seconds,
         )
     except RuntimeError as error:

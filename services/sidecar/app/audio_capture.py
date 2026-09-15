@@ -7,8 +7,28 @@ from typing import Any
 import numpy as np
 import sounddevice as sd
 
-
 SAMPLE_RATE = 16000
+DEFAULT_DEVICE_SAMPLE_RATE = 48000
+PYAUDIO_DEVICE_PREFIX = "pyaudio:"
+
+
+def resample_audio(
+    audio: np.ndarray,
+    source_rate: int,
+    target_rate: int = SAMPLE_RATE,
+) -> np.ndarray:
+    mono = mix_to_mono(audio)
+    if not mono.size or source_rate == target_rate:
+        return mono
+    output_size = max(1, round(len(mono) * target_rate / source_rate))
+    source_positions = np.arange(len(mono), dtype=np.float64)
+    target_positions = np.linspace(
+        0,
+        len(mono) - 1,
+        output_size,
+        dtype=np.float64,
+    )
+    return np.interp(target_positions, source_positions, mono).astype(np.float32)
 
 
 def mix_to_mono(audio: np.ndarray) -> np.ndarray:
@@ -35,8 +55,12 @@ class AudioSession:
         self._mic_chunks: list[np.ndarray] = []
         self._loopback_chunks: list[np.ndarray] = []
         self._streams: list[Any] = []
+        self._audio_clients: list[Any] = []
+        self._mic_sample_rate = SAMPLE_RATE
+        self._loopback_sample_rate = SAMPLE_RATE
         self._started_at = 0.0
         self._timer: threading.Timer | None = None
+        self._last_result: tuple[np.ndarray, int, float] | None = None
 
     @property
     def recording(self) -> bool:
@@ -44,8 +68,8 @@ class AudioSession:
 
     def start(
         self,
-        mic_device_id: int | None,
-        loopback_device_id: int | None,
+        mic_device_id: int | str | None,
+        loopback_device_id: int | str | None,
         max_seconds: int = 180,
     ) -> None:
         with self._lock:
@@ -54,23 +78,30 @@ class AudioSession:
 
             self._mic_chunks = []
             self._loopback_chunks = []
+            self._last_result = None
+            self._streams = []
+            self._audio_clients = []
             self._started_at = time.time()
             self._recording = True
 
             try:
                 if mic_device_id is not None or loopback_device_id is None:
-                    self._streams.append(
-                        self._open_stream(mic_device_id, self._mic_chunks)
+                    stream, self._mic_sample_rate = self._open_stream(
+                        mic_device_id,
+                        self._mic_chunks,
                     )
+                    self._streams.append(stream)
                 if loopback_device_id is not None:
-                    self._streams.append(
-                        self._open_stream(
-                            loopback_device_id,
-                            self._loopback_chunks,
-                        )
+                    stream, self._loopback_sample_rate = self._open_stream(
+                        loopback_device_id,
+                        self._loopback_chunks,
                     )
+                    self._streams.append(stream)
                 for stream in self._streams:
-                    stream.start()
+                    if hasattr(stream, "start_stream"):
+                        stream.start_stream()
+                    else:
+                        stream.start()
             except Exception:
                 self._recording = False
                 self._close_streams()
@@ -82,70 +113,154 @@ class AudioSession:
 
     def _open_stream(
         self,
-        device_id: int | None,
+        device_id: int | str | None,
         chunks: list[np.ndarray],
-    ) -> Any:
+    ) -> tuple[Any, int]:
+        if isinstance(device_id, str) and device_id.startswith(
+            PYAUDIO_DEVICE_PREFIX
+        ):
+            return self._open_pyaudio_loopback(device_id, chunks)
+
+        device = sd.query_devices(device_id, "input")
+        sample_rate = _device_sample_rate(device)
+        channels = max(1, int(device["max_input_channels"]))
+
         def callback(indata, frames, time_info, status):  # noqa: ARG001
             if self._recording:
                 chunks.append(indata.copy())
 
         return sd.InputStream(
-            samplerate=SAMPLE_RATE,
-            channels=1,
+            samplerate=sample_rate,
+            channels=channels,
             dtype="float32",
             device=device_id,
             callback=callback,
-        )
+        ), sample_rate
+
+    def _open_pyaudio_loopback(
+        self,
+        device_id: str,
+        chunks: list[np.ndarray],
+    ) -> tuple[Any, int]:
+        try:
+            import pyaudiowpatch as pyaudio
+        except ImportError as error:
+            raise RuntimeError(
+                "PyAudioWPatch is required for WASAPI loopback capture"
+            ) from error
+
+        index = int(device_id.removeprefix(PYAUDIO_DEVICE_PREFIX))
+        client = pyaudio.PyAudio()
+        try:
+            device = client.get_device_info_by_index(index)
+            sample_rate = _device_sample_rate(device)
+            channels = max(
+                1,
+                int(
+                    device.get("maxInputChannels")
+                    or device.get("maxOutputChannels")
+                    or 1
+                ),
+            )
+
+            def callback(in_data, frame_count, time_info, status):  # noqa: ARG001
+                if self._recording and in_data:
+                    samples = np.frombuffer(in_data, dtype=np.float32)
+                    chunks.append(samples.reshape(-1, channels).copy())
+                return None, pyaudio.paContinue
+
+            # PyAudioWPatch exposes WASAPI render endpoints as real input
+            # devices, unlike sounddevice builds without loopback settings.
+            stream = client.open(
+                format=pyaudio.paFloat32,
+                channels=channels,
+                rate=sample_rate,
+                input=True,
+                input_device_index=index,
+                stream_callback=callback,
+                start=False,
+            )
+        except Exception:
+            client.terminate()
+            raise
+        self._audio_clients.append(client)
+        return stream, sample_rate
 
     def _auto_stop(self) -> None:
         try:
-            if self._recording:
-                self.stop()
+            with self._lock:
+                if self._recording:
+                    self._last_result = self._finish_capture()
         except Exception:
             pass
 
     def _close_streams(self) -> None:
         for stream in self._streams:
             try:
-                stream.stop()
+                if hasattr(stream, "stop_stream"):
+                    stream.stop_stream()
+                else:
+                    stream.stop()
             finally:
                 stream.close()
         self._streams = []
+        for client in self._audio_clients:
+            client.terminate()
+        self._audio_clients = []
 
     def stop(self) -> tuple[np.ndarray, int, float]:
         with self._lock:
+            if self._last_result is not None:
+                result = self._last_result
+                self._last_result = None
+                return result
             if not self._recording and not (
                 self._mic_chunks or self._loopback_chunks
             ):
                 return np.zeros(0, dtype=np.float32), SAMPLE_RATE, 0.0
+            return self._finish_capture()
 
-            self._recording = False
-            if self._timer is not None:
-                self._timer.cancel()
-                self._timer = None
-            self._close_streams()
+    def _finish_capture(self) -> tuple[np.ndarray, int, float]:
+        self._recording = False
+        if self._timer is not None:
+            self._timer.cancel()
+            self._timer = None
+        self._close_streams()
 
-            duration = (
-                time.time() - self._started_at if self._started_at else 0.0
-            )
-            mic = self._concatenate(self._mic_chunks)
-            loopback = self._concatenate(self._loopback_chunks)
-            self._mic_chunks = []
-            self._loopback_chunks = []
+        duration = time.time() - self._started_at if self._started_at else 0.0
+        mic = resample_audio(
+            self._concatenate(self._mic_chunks),
+            self._mic_sample_rate,
+        )
+        loopback = resample_audio(
+            self._concatenate(self._loopback_chunks),
+            self._loopback_sample_rate,
+        )
+        self._mic_chunks = []
+        self._loopback_chunks = []
 
-            if mic.size and loopback.size:
-                audio = mix_streams(mic, loopback)
-            elif mic.size:
-                audio = mix_to_mono(mic)
-            else:
-                audio = mix_to_mono(loopback)
-            return audio, SAMPLE_RATE, duration
+        if mic.size and loopback.size:
+            audio = mix_streams(mic, loopback)
+        elif mic.size:
+            audio = mic
+        else:
+            audio = loopback
+        return audio, SAMPLE_RATE, duration
 
     @staticmethod
     def _concatenate(chunks: list[np.ndarray]) -> np.ndarray:
         if not chunks:
             return np.zeros(0, dtype=np.float32)
         return np.concatenate(chunks, axis=0)
+
+
+def _device_sample_rate(device: Any) -> int:
+    value = device.get("default_samplerate", device.get("defaultSampleRate"))
+    try:
+        sample_rate = int(float(value))
+    except (TypeError, ValueError):
+        return DEFAULT_DEVICE_SAMPLE_RATE
+    return sample_rate if sample_rate > 0 else DEFAULT_DEVICE_SAMPLE_RATE
 
 
 SESSION = AudioSession()
