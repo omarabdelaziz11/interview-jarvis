@@ -10,6 +10,7 @@ const retryButton = document.querySelector('#retry-button');
 const muteButton = document.querySelector('#mute-button');
 const copyButton = document.querySelector('#copy-button');
 const modeButtons = [...document.querySelectorAll('[data-mode]')];
+let activeAudio = null;
 
 const STATUS_LABELS = {
   idle: 'Idle',
@@ -98,6 +99,40 @@ async function invoke(action) {
   }
 }
 
+function stopAudio() {
+  if (!activeAudio) return;
+  activeAudio.pause();
+  activeAudio.removeAttribute('src');
+  activeAudio.load();
+  activeAudio = null;
+}
+
+function playAudio(payload) {
+  if (
+    !payload ||
+    typeof payload.id !== 'string' ||
+    typeof payload.audio !== 'string' ||
+    !payload.audio
+  ) {
+    return;
+  }
+
+  stopAudio();
+  const audio = new Audio(`data:audio/mpeg;base64,${payload.audio}`);
+  activeAudio = audio;
+  let finished = false;
+
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    if (activeAudio === audio) activeAudio = null;
+    void invoke(() => window.jarvis.audioEnded(payload.id));
+  };
+  audio.addEventListener('ended', finish, { once: true });
+  audio.addEventListener('error', finish, { once: true });
+  void audio.play().catch(finish);
+}
+
 for (const button of modeButtons) {
   button.addEventListener('click', () => invoke(() => window.jarvis.setMode(button.dataset.mode)));
 }
@@ -114,3 +149,5 @@ document
 document.querySelector('#hide-button').addEventListener('click', () => invoke(window.jarvis.hide));
 
 window.jarvis.onState(renderState);
+window.jarvis.onPlayAudio(playAudio);
+window.jarvis.onStopAudio(stopAudio);

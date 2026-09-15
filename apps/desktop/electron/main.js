@@ -8,6 +8,7 @@ const conversation = require('./conversation');
 const openaiClient = require('./openai-client');
 const { systemFor } = require('./prompts');
 const { createListenHandlers } = require('./listen-pipeline');
+const tts = require('./tts');
 
 const MODES = new Set(['jarvis', 'interview']);
 const state = {
@@ -23,6 +24,9 @@ let settingsWindow = null;
 let quitting = false;
 let unregisterHotkey = () => {};
 let listenHandlers = null;
+let speechGeneration = 0;
+let speechAbortController = null;
+let activePlaybackId = null;
 const sidecarManager = new SidecarManager();
 sidecarManager.onStatus(({ status }) => {
   if (status === 'failed') {
@@ -41,6 +45,54 @@ function stateSnapshot() {
 function sendState() {
   if (overlay && !overlay.isDestroyed()) {
     overlay.webContents.send('state', stateSnapshot());
+  }
+}
+
+function sendOverlay(channel, payload) {
+  if (overlay && !overlay.isDestroyed()) {
+    overlay.webContents.send(channel, payload);
+  }
+}
+
+function stopSpeech({ resetStatus = true } = {}) {
+  speechGeneration += 1;
+  speechAbortController?.abort();
+  speechAbortController = null;
+  activePlaybackId = null;
+  sendOverlay('stop-audio');
+
+  if (resetStatus && state.status === 'speaking') {
+    state.status = 'idle';
+    sendState();
+  }
+}
+
+async function speakAnswer(client, answer) {
+  const generation = ++speechGeneration;
+  const controller = new AbortController();
+  speechAbortController?.abort();
+  speechAbortController = controller;
+  activePlaybackId = null;
+  sendOverlay('stop-audio');
+  state.status = 'speaking';
+  sendState();
+
+  try {
+    const audio = await tts.synthesize(client, answer, 'alloy', {
+      signal: controller.signal,
+    });
+    if (generation !== speechGeneration || controller.signal.aborted || state.muted) return;
+
+    const playbackId = `speech-${generation}`;
+    activePlaybackId = playbackId;
+    sendOverlay('play-audio', { id: playbackId, audio });
+  } catch (error) {
+    if (generation !== speechGeneration || controller.signal.aborted) return;
+    state.status = 'idle';
+    state.error = 'Answer ready, but speech could not be played.';
+    sendState();
+  } finally {
+    if (speechAbortController === controller) speechAbortController = null;
   }
 }
 
@@ -74,7 +126,8 @@ function ensureListenHandlers() {
   return listenHandlers;
 }
 
-function startListen() {
+async function startListen() {
+  if (state.status === 'speaking') stopSpeech();
   return ensureListenHandlers().startListen();
 }
 
@@ -83,6 +136,10 @@ function stopListen() {
 }
 
 function toggleListen() {
+  if (state.status === 'speaking') {
+    void startListen();
+    return;
+  }
   ensureListenHandlers().toggleListen();
 }
 
@@ -216,11 +273,15 @@ async function runTurn(transcript) {
     }
 
     conversation.appendAssistant(answer);
-    // Task 8 will set status to 'speaking' when TTS plays; idle is correct until then.
-    state.status = 'idle';
     state.error = null;
     state.lastTurnFailed = false;
     sendState();
+    if (!state.muted && settings.ttsEnabled) {
+      await speakAnswer(client, answer);
+    } else {
+      state.status = 'idle';
+      sendState();
+    }
     return answer;
   } catch {
     state.status = 'error';
@@ -259,6 +320,7 @@ function registerIpcHandlers() {
 
   ipcMain.handle('clear-conversation', (event) => {
     if (!isOverlaySender(event)) return stateSnapshot();
+    stopSpeech();
     conversation.clear();
     state.error = null;
     state.heard = null;
@@ -270,8 +332,19 @@ function registerIpcHandlers() {
   ipcMain.handle('toggle-mute', (event) => {
     if (!isOverlaySender(event)) return stateSnapshot();
     state.muted = !state.muted;
+    if (state.muted) stopSpeech();
     sendState();
     return stateSnapshot();
+  });
+
+  ipcMain.handle('audio-ended', (event, playbackId) => {
+    if (!isOverlaySender(event) || playbackId !== activePlaybackId) return false;
+    activePlaybackId = null;
+    if (state.status === 'speaking') {
+      state.status = 'idle';
+      sendState();
+    }
+    return true;
   });
 
   ipcMain.handle('copy-last', (event) => {
@@ -317,6 +390,9 @@ function registerIpcHandlers() {
     }
     if (saved.hotkey !== previous.hotkey || saved.pressStyle !== previous.pressStyle) {
       registerConfiguredHotkey();
+    }
+    if (!saved.ttsEnabled && previous.ttsEnabled) {
+      stopSpeech();
     }
     return saved;
   });
@@ -394,7 +470,9 @@ function createSettingsWindow() {
 
 app.whenReady().then(() => {
   registerIpcHandlers();
-  conversation.setMode(getSettings().defaultMode);
+  const settings = getSettings();
+  conversation.setMode(settings.defaultMode);
+  state.muted = !settings.ttsEnabled;
   createOverlay();
   registerConfiguredHotkey();
   sidecarManager.start();
@@ -414,6 +492,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', (event) => {
   if (quitting) return;
   event.preventDefault();
+  stopSpeech({ resetStatus: false });
   clearListenTimeout();
   unregisterHotkey();
   globalShortcut.unregisterAll();

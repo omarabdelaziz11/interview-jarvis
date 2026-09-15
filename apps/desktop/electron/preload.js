@@ -10,6 +10,25 @@ contextBridge.exposeInMainWorld('jarvis', {
     ipcRenderer.on('state', listener);
     return () => ipcRenderer.removeListener('state', listener);
   },
+  onPlayAudio: (callback) => {
+    if (typeof callback !== 'function') {
+      throw new TypeError('onPlayAudio requires a callback');
+    }
+
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('play-audio', listener);
+    return () => ipcRenderer.removeListener('play-audio', listener);
+  },
+  onStopAudio: (callback) => {
+    if (typeof callback !== 'function') {
+      throw new TypeError('onStopAudio requires a callback');
+    }
+
+    const listener = () => callback();
+    ipcRenderer.on('stop-audio', listener);
+    return () => ipcRenderer.removeListener('stop-audio', listener);
+  },
+  audioEnded: (playbackId) => ipcRenderer.invoke('audio-ended', playbackId),
   setMode: (mode) => ipcRenderer.invoke('set-mode', mode),
   clearConversation: () => ipcRenderer.invoke('clear-conversation'),
   toggleMute: () => ipcRenderer.invoke('toggle-mute'),

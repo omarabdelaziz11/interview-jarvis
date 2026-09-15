@@ -1,7 +1,10 @@
 const OpenAI = require('openai');
 
 function createClient(apiKey) {
-  return new OpenAI({ apiKey });
+  if (typeof apiKey !== 'string' || !apiKey.trim()) {
+    throw new TypeError('OpenAI API key is required');
+  }
+  return new OpenAI({ apiKey: apiKey.trim() });
 }
 
 async function chat(client, { model, system, messages }) {
