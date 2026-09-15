@@ -14,8 +14,8 @@
   <body>
     <main class="overlay" aria-label="Jarvis assistant">
       <header class="header">
-        <div>
-          <p class="eyebrow">Jarvis</p>
+        <div class="header-drag">
+          <p class="eyebrow" id="brand-label">Jarvis</p>
           <div class="status">
             <span class="status-dot" aria-hidden="true"></span>
             <span id="status-text">Idle</span>
@@ -45,7 +45,9 @@
       </div>
 
       <footer class="controls">
+        <!-- TTS disabled for now — Mute only controlled speech playback
         <button type="button" id="mute-button" aria-pressed="false">Mute</button>
+        -->
         <button type="button" id="clear-button">Clear</button>
         <button type="button" id="copy-button">Copy</button>
         <button type="button" id="settings-button">Settings</button>

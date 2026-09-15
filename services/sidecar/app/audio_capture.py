@@ -16,6 +16,13 @@ class AudioDeviceError(RuntimeError):
     pass
 
 
+def chunk_rms(audio: np.ndarray) -> float:
+    if audio.size == 0:
+        return 0.0
+    mono = mix_to_mono(audio)
+    return float(np.sqrt(np.mean(np.square(mono), dtype=np.float64)))
+
+
 def resample_audio(
     audio: np.ndarray,
     source_rate: int,
@@ -64,17 +71,34 @@ class AudioSession:
         self._loopback_sample_rate = SAMPLE_RATE
         self._started_at = 0.0
         self._timer: threading.Timer | None = None
+        self._endpoint_thread: threading.Thread | None = None
         self._last_result: tuple[np.ndarray, int, float] | None = None
+        self._speech_detected = False
+        self._utterance_complete = False
+        self._endpointing = False
 
     @property
     def recording(self) -> bool:
         return self._recording
+
+    def status(self) -> dict[str, bool]:
+        with self._lock:
+            return {
+                "recording": self._recording,
+                "speech_detected": self._speech_detected,
+                "utterance_complete": self._utterance_complete
+                or (not self._recording and self._last_result is not None),
+            }
 
     def start(
         self,
         mic_device_id: int | str | None,
         loopback_device_id: int | str | None,
         max_seconds: int = 180,
+        endpointing: bool = False,
+        silence_ms: int = 900,
+        speech_rms: float = 0.02,
+        min_speech_ms: int = 250,
     ) -> None:
         with self._lock:
             if self._recording:
@@ -87,6 +111,9 @@ class AudioSession:
             self._audio_clients = []
             self._started_at = time.time()
             self._recording = True
+            self._speech_detected = False
+            self._utterance_complete = False
+            self._endpointing = endpointing
 
             try:
                 if mic_device_id != "off":
@@ -101,11 +128,17 @@ class AudioSession:
                         self._loopback_chunks,
                     )
                     self._streams.append(stream)
+                if not self._streams:
+                    raise AudioDeviceError("Could not open selected audio device")
                 for stream in self._streams:
                     if hasattr(stream, "start_stream"):
                         stream.start_stream()
                     else:
                         stream.start()
+            except AudioDeviceError:
+                self._recording = False
+                self._close_streams()
+                raise
             except Exception as error:
                 self._recording = False
                 self._close_streams()
@@ -114,6 +147,79 @@ class AudioSession:
             self._timer = threading.Timer(max_seconds, self._auto_stop)
             self._timer.daemon = True
             self._timer.start()
+
+            if endpointing:
+                self._endpoint_thread = threading.Thread(
+                    target=self._endpoint_monitor,
+                    kwargs={
+                        "silence_ms": silence_ms,
+                        "speech_rms": speech_rms,
+                        "min_speech_ms": min_speech_ms,
+                    },
+                    daemon=True,
+                    name="audio-endpointing",
+                )
+                self._endpoint_thread.start()
+
+    def _vad_chunks(self) -> list[np.ndarray]:
+        # Prefer mic for "stopped talking"; fall back to loopback if mic-off.
+        if self._mic_chunks:
+            return self._mic_chunks
+        return self._loopback_chunks
+
+    def _endpoint_monitor(
+        self,
+        silence_ms: int,
+        speech_rms: float,
+        min_speech_ms: int,
+    ) -> None:
+        poll_s = 0.05
+        speech_started_at: float | None = None
+        silence_started_at: float | None = None
+        seen = 0
+
+        while True:
+            time.sleep(poll_s)
+            with self._lock:
+                if not self._recording:
+                    return
+                chunks = self._vad_chunks()
+                if len(chunks) <= seen:
+                    recent = None
+                else:
+                    recent = chunks[-1]
+                    seen = len(chunks)
+
+            if recent is None:
+                continue
+
+            rms = chunk_rms(recent)
+            now = time.time()
+            if rms >= speech_rms:
+                silence_started_at = None
+                if speech_started_at is None:
+                    speech_started_at = now
+                with self._lock:
+                    self._speech_detected = True
+                continue
+
+            if speech_started_at is None:
+                continue
+
+            spoken_ms = (now - speech_started_at) * 1000
+            if spoken_ms < min_speech_ms:
+                continue
+
+            if silence_started_at is None:
+                silence_started_at = now
+                continue
+
+            if (now - silence_started_at) * 1000 >= silence_ms:
+                with self._lock:
+                    if self._recording:
+                        self._utterance_complete = True
+                        self._last_result = self._finish_capture()
+                return
 
     def _open_stream(
         self,
@@ -173,8 +279,6 @@ class AudioSession:
                     chunks.append(samples.reshape(-1, channels).copy())
                 return None, pyaudio.paContinue
 
-            # PyAudioWPatch exposes WASAPI render endpoints as real input
-            # devices, unlike sounddevice builds without loopback settings.
             stream = client.open(
                 format=pyaudio.paFloat32,
                 channels=channels,
@@ -194,6 +298,7 @@ class AudioSession:
         try:
             with self._lock:
                 if self._recording:
+                    self._utterance_complete = True
                     self._last_result = self._finish_capture()
         except Exception:
             pass

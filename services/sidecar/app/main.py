@@ -9,6 +9,7 @@ from app.devices import list_devices
 from app.schema import (
     DevicesResponse,
     HealthResponse,
+    ListenStatusResponse,
     StartListenRequest,
     TranscriptResponse,
 )
@@ -34,6 +35,11 @@ def devices() -> DevicesResponse:
     return list_devices()
 
 
+@app.get("/listen/status", response_model=ListenStatusResponse)
+def listen_status() -> ListenStatusResponse:
+    return ListenStatusResponse(**SESSION.status())
+
+
 @app.post("/listen/start")
 def listen_start(body: StartListenRequest) -> dict[str, str]:
     try:
@@ -41,6 +47,10 @@ def listen_start(body: StartListenRequest) -> dict[str, str]:
             mic_device_id=body.mic_device_id,
             loopback_device_id=body.loopback_device_id,
             max_seconds=body.max_seconds,
+            endpointing=body.endpointing,
+            silence_ms=body.silence_ms,
+            speech_rms=body.speech_rms,
+            min_speech_ms=body.min_speech_ms,
         )
     except AudioDeviceError as error:
         raise HTTPException(

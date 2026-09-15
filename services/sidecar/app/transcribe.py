@@ -22,7 +22,7 @@ def get_model():
         if _model is None:
             from faster_whisper import WhisperModel
 
-            model_size = os.environ.get("WHISPER_MODEL", "base")
+            model_size = os.environ.get("WHISPER_MODEL", "small")
             device = os.environ.get("WHISPER_DEVICE", "cpu")
             compute = os.environ.get("WHISPER_COMPUTE", "int8")
             _model = WhisperModel(model_size, device=device, compute_type=compute)
@@ -45,6 +45,11 @@ def transcribe(audio: np.ndarray, sample_rate: int) -> str:
     if is_silence(audio):
         return ""
     model = get_model()
-    segments, _info = model.transcribe(audio, language=None, vad_filter=True)
+    language = os.environ.get("WHISPER_LANGUAGE", "en")
+    segments, _info = model.transcribe(
+        audio,
+        language=language or "en",
+        vad_filter=True,
+    )
     parts = [seg.text.strip() for seg in segments if seg.text.strip()]
     return " ".join(parts).strip()

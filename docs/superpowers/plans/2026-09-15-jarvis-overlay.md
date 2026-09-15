@@ -91,7 +91,7 @@
 - [ ] **Step 1: Init git and ignore junk**
 
 ```bash
-cd "D:\Interview Agent"
+cd "<repo>"
 git init
 ```
 
@@ -152,7 +152,7 @@ def test_health_ok():
 - [ ] **Step 3: Run tests — expect fail**
 
 ```bash
-cd "D:\Interview Agent\services\sidecar"
+cd "<repo>/services/sidecar"
 python -m venv .venv
 .\.venv\Scripts\activate
 pip install fastapi uvicorn pydantic pytest httpx
@@ -240,7 +240,7 @@ if __name__ == "__main__":
 - [ ] **Step 5: Run tests — expect pass**
 
 ```bash
-cd "D:\Interview Agent\services\sidecar"
+cd "<repo>/services/sidecar"
 .\.venv\Scripts\activate
 pip install -r requirements.txt
 pytest tests/test_schema.py tests/test_health.py -v

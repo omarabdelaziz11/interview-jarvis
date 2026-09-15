@@ -6,11 +6,11 @@ const store = new Store({ name: 'jarvis-settings' });
 
 const DEFAULTS = Object.freeze({
   model: 'gpt-4o-mini',
-  whisperModel: 'base',
+  whisperModel: 'small',
   hotkey: 'CommandOrControl+Shift+Space',
-  pressStyle: 'hold',
+  pressStyle: 'continuous',
   defaultMode: 'jarvis',
-  ttsEnabled: true,
+  ttsEnabled: false, // TTS disabled — text-only replies; do not re-enable without restoring UI
   micDeviceId: null,
   loopbackDeviceId: null,
   sidecarPython: path.resolve(
@@ -47,14 +47,16 @@ function normalizeSettings(partial) {
       }
       normalized[key] = value;
     } else if (key === 'pressStyle') {
-      if (!['hold', 'toggle'].includes(value)) throw new TypeError('Invalid press style');
+      if (!['hold', 'toggle', 'continuous'].includes(value)) {
+        throw new TypeError('Invalid press style');
+      }
       normalized[key] = value;
     } else if (key === 'defaultMode') {
       if (!['jarvis', 'interview'].includes(value)) throw new TypeError('Invalid default mode');
       normalized[key] = value;
     } else if (key === 'ttsEnabled') {
-      if (typeof value !== 'boolean') throw new TypeError('ttsEnabled must be a boolean');
-      normalized[key] = value;
+      // TTS is disabled in the product UI; ignore attempts to turn it on.
+      normalized.ttsEnabled = false;
     } else if (key === 'apiKey') {
       if (typeof value !== 'string' || value.length > 4096) {
         throw new TypeError('apiKey must be a string');
@@ -78,6 +80,8 @@ function getSettings() {
       // Keep the environment fallback when stored credentials cannot be decrypted.
     }
   }
+  // TTS disabled in product UI — never expose as enabled.
+  data.ttsEnabled = false;
   return data;
 }
 

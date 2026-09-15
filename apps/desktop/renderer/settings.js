@@ -8,7 +8,7 @@ const fields = {
   hotkey: document.querySelector('#hotkey'),
   pressStyle: document.querySelector('#press-style'),
   defaultMode: document.querySelector('#default-mode'),
-  ttsEnabled: document.querySelector('#tts-enabled'),
+  ttsEnabled: document.querySelector('#tts-enabled'), // null while TTS UI is disabled
   micDeviceId: document.querySelector('#mic-device'),
   loopbackDeviceId: document.querySelector('#loopback-device'),
   sidecarPython: document.querySelector('#sidecar-python'),
@@ -118,7 +118,9 @@ function renderSettings(settings) {
   fields.hotkey.value = settings.hotkey || '';
   fields.pressStyle.value = settings.pressStyle || 'hold';
   fields.defaultMode.value = settings.defaultMode || 'jarvis';
-  fields.ttsEnabled.checked = Boolean(settings.ttsEnabled);
+  if (fields.ttsEnabled) {
+    fields.ttsEnabled.checked = Boolean(settings.ttsEnabled);
+  }
   fields.sidecarPython.value = settings.sidecarPython || '';
 }
 
@@ -145,7 +147,7 @@ form.addEventListener('submit', async (event) => {
       hotkey: fields.hotkey.value,
       pressStyle: fields.pressStyle.value,
       defaultMode: fields.defaultMode.value,
-      ttsEnabled: fields.ttsEnabled.checked,
+      // TTS UI disabled — do not send ttsEnabled from settings
       micDeviceId: decodeDeviceId(fields.micDeviceId.value),
       loopbackDeviceId: decodeDeviceId(fields.loopbackDeviceId.value),
       sidecarPython: fields.sidecarPython.value,

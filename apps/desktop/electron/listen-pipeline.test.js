@@ -28,6 +28,34 @@ describe('listen-pipeline helpers', () => {
         mic_device_id: 'mic-1',
         loopback_device_id: 'loop-2',
         max_seconds: MAX_LISTEN_SECONDS,
+        endpointing: false,
+        silence_ms: 900,
+        min_speech_ms: 250,
+      },
+    );
+  });
+
+  it('buildListenStartBody enables endpointing when requested', () => {
+    assert.equal(
+      buildListenStartBody({ micDeviceId: null, loopbackDeviceId: null }, { endpointing: true })
+        .endpointing,
+      true,
+    );
+  });
+
+  it('interview mode forces mic off and uses resolved loopback', () => {
+    assert.deepEqual(
+      buildListenStartBody(
+        { micDeviceId: 21, loopbackDeviceId: 16 },
+        { mode: 'interview', loopbackDeviceId: 'pyaudio:13' },
+      ),
+      {
+        mic_device_id: 'off',
+        loopback_device_id: 'pyaudio:13',
+        max_seconds: MAX_LISTEN_SECONDS,
+        endpointing: false,
+        silence_ms: 1200,
+        min_speech_ms: 350,
       },
     );
   });
@@ -102,6 +130,9 @@ describe('createListenHandlers', () => {
         mic_device_id: 'mic-a',
         loopback_device_id: 'loop-b',
         max_seconds: 42,
+        endpointing: false,
+        silence_ms: 900,
+        min_speech_ms: 250,
       },
     ]);
   });
@@ -113,6 +144,23 @@ describe('createListenHandlers', () => {
 
     assert.equal(state.lastTurnFailed, false);
     assert.equal(state.status, 'listening');
+  });
+
+  it('toggles continuous session on and off', async () => {
+    sidecarClient.listenStatus = async () => ({
+      recording: false,
+      speech_detected: true,
+      utterance_complete: true,
+    });
+    sidecarClient.listenStop = async () => ({ text: '' });
+
+    const handlers = createHandlers({ sleepFn: async () => {} });
+    handlers.toggleContinuousSession();
+    assert.equal(handlers.isContinuousSessionActive(), true);
+
+    await handlers.stopContinuousSession();
+    assert.equal(handlers.isContinuousSessionActive(), false);
+    assert.equal(state.status, 'idle');
   });
 
   it('does not clear a newer pending listenStart when an older request completes', async () => {

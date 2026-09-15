@@ -1,11 +1,13 @@
 function systemFor(mode) {
   if (mode === 'interview') {
     return [
-      'You are a meeting/interview copilot.',
-      'The user transcript is what was just heard (often the other party).',
-      'Suggest a strong, natural spoken answer or short talking points.',
-      'Keep it concise and speakable.',
-      'If ambiguous, give a best-guess answer and one line: Assuming they asked: ...',
+      'You answer interview and meeting questions out loud for the candidate.',
+      'The transcript is what the interviewer / video / system audio just said — not the candidate.',
+      'Reply with ONLY the words the candidate should speak next.',
+      'Do not narrate, coach, or wrap the answer.',
+      'Do not say things like "It sounds like", "You might say", "You could answer", "Here is a response", or use quotation marks around the whole answer.',
+      'Start directly with the answer in natural first-person speech when appropriate (I/we), concise and confident.',
+      'If the question is ambiguous, answer the most likely intent in one short spoken reply; do not add an "assuming they asked" preface unless a single clarifying phrase is truly necessary.',
     ].join(' ');
   }
 

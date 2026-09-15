@@ -7,14 +7,16 @@ const emptyState = document.querySelector('#empty-state');
 const errorRow = document.querySelector('#error-row');
 const errorElement = document.querySelector('#error');
 const retryButton = document.querySelector('#retry-button');
-const muteButton = document.querySelector('#mute-button');
+const muteButton = document.querySelector('#mute-button'); // null while TTS UI is disabled
 const copyButton = document.querySelector('#copy-button');
+const brandLabel = document.querySelector('#brand-label');
 const modeButtons = [...document.querySelectorAll('[data-mode]')];
 let activeAudio = null;
+let currentMode = 'jarvis';
 
 const STATUS_LABELS = {
   idle: 'Idle',
-  listening: 'Listening',
+  listening: 'Listening — pause to reply',
   transcribing: 'Transcribing',
   thinking: 'Thinking',
   speaking: 'Speaking',
@@ -51,7 +53,12 @@ function renderMessages(messages) {
     article.className = 'message';
     article.dataset.role = message.role;
     role.className = 'message-role';
-    role.textContent = message.role === 'assistant' ? 'Jarvis' : 'You';
+    role.textContent =
+      message.role === 'assistant'
+        ? currentMode === 'interview'
+          ? 'Interview'
+          : 'Jarvis'
+        : 'You';
     content.textContent = message.content;
     article.append(role, content);
     fragment.append(article);
@@ -78,11 +85,18 @@ function renderState(state) {
   errorRow.hidden = !error;
   retryButton.hidden = !(state.lastTurnFailed && error && heard);
 
-  muteButton.textContent = state.muted ? 'Unmute' : 'Mute';
-  muteButton.setAttribute('aria-pressed', String(Boolean(state.muted)));
+  if (muteButton) {
+    muteButton.textContent = state.muted ? 'Unmute' : 'Mute';
+    muteButton.setAttribute('aria-pressed', String(Boolean(state.muted)));
+  }
+
+  currentMode = state.mode === 'interview' ? 'interview' : 'jarvis';
+  if (brandLabel) {
+    brandLabel.textContent = currentMode === 'interview' ? 'Interview' : 'Jarvis';
+  }
 
   for (const button of modeButtons) {
-    const active = button.dataset.mode === state.mode;
+    const active = button.dataset.mode === currentMode;
     button.classList.toggle('active', active);
     button.setAttribute('aria-pressed', String(active));
   }
@@ -134,10 +148,32 @@ function playAudio(payload) {
 }
 
 for (const button of modeButtons) {
-  button.addEventListener('click', () => invoke(() => window.jarvis.setMode(button.dataset.mode)));
+  // mousedown + click: Electron drag regions can swallow click alone
+  const selectMode = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const mode = button.dataset.mode;
+    if (mode !== 'jarvis' && mode !== 'interview') return;
+    currentMode = mode;
+    for (const chip of modeButtons) {
+      const active = chip.dataset.mode === mode;
+      chip.classList.toggle('active', active);
+      chip.setAttribute('aria-pressed', String(active));
+    }
+    if (brandLabel) {
+      brandLabel.textContent = mode === 'interview' ? 'Interview' : 'Jarvis';
+    }
+    void invoke(() => window.jarvis.setMode(mode));
+  };
+  button.addEventListener('mousedown', (event) => {
+    if (event.button === 0) event.stopPropagation();
+  });
+  button.addEventListener('click', selectMode);
 }
 
-muteButton.addEventListener('click', () => invoke(window.jarvis.toggleMute));
+if (muteButton) {
+  muteButton.addEventListener('click', () => invoke(window.jarvis.toggleMute));
+}
 document
   .querySelector('#clear-button')
   .addEventListener('click', () => invoke(window.jarvis.clearConversation));

@@ -56,7 +56,8 @@ describe('conversation', () => {
 describe('systemFor', () => {
   it('returns mode-specific instructions', () => {
     assert.match(systemFor('jarvis'), /desktop assistant/i);
-    assert.match(systemFor('interview'), /spoken answer/i);
+    assert.match(systemFor('interview'), /ONLY the words the candidate should speak/i);
+    assert.match(systemFor('interview'), /Do not narrate/i);
     assert.notEqual(systemFor('jarvis'), systemFor('interview'));
   });
 });

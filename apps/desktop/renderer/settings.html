@@ -37,10 +37,12 @@
               <option value="interview">Interview</option>
             </select>
           </label>
+          <!-- TTS disabled for now (text-only replies; avoids speech API billing)
           <label class="check-row">
             <input id="tts-enabled" type="checkbox" />
             Enable text-to-speech by default
           </label>
+          -->
         </section>
 
         <section>
@@ -52,8 +54,9 @@
           <label>
             Press style
             <select id="press-style">
+              <option value="continuous">Always listen (auto after pause)</option>
               <option value="hold">Hold to listen</option>
-              <option value="toggle">Press to toggle</option>
+              <option value="toggle">Press to start/stop one clip</option>
             </select>
           </label>
         </section>
@@ -68,6 +71,7 @@
             System audio
             <select id="loopback-device"></select>
           </label>
+          <p class="hint">Interview mode uses system audio only (Speakers/Headphones Loopback). Jarvis mode can use mic + system audio.</p>
           <label>
             Whisper model
             <input id="whisper-model" type="text" required maxlength="200" spellcheck="false" />

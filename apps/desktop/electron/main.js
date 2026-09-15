@@ -12,6 +12,9 @@ const { createListenHandlers } = require('./listen-pipeline');
 const { OVERLAY_ERRORS, openAiErrorMessage } = require('./errors');
 const tts = require('./tts');
 
+/** Text-only mode: TTS UI removed; keep false until speech is productized again. */
+const TTS_ENABLED = false;
+
 const MODES = new Set(['jarvis', 'interview']);
 const state = {
   status: 'idle',
@@ -74,6 +77,8 @@ function stopSpeech({ resetStatus = true } = {}) {
 }
 
 async function speakAnswer(client, answer) {
+  // TTS disabled — text-only replies.
+  if (!TTS_ENABLED) return;
   const generation = ++speechGeneration;
   const controller = new AbortController();
   speechAbortController?.abort();
@@ -131,6 +136,7 @@ function ensureListenHandlers() {
   listenHandlers = createListenHandlers(state, {
     sidecarClient,
     getSettings,
+    getMode: () => conversation.getMode(),
     sendState,
     showSidecarError,
     runTurn,
@@ -141,7 +147,7 @@ function ensureListenHandlers() {
 async function startListen() {
   showOverlay();
   if (state.status === 'speaking') stopSpeech();
-  return ensureListenHandlers().startListen();
+  return ensureListenHandlers().startListen({ endpointing: false });
 }
 
 function stopListen() {
@@ -150,11 +156,14 @@ function stopListen() {
 
 function toggleListen() {
   showOverlay();
-  if (state.status === 'speaking') {
-    void startListen();
-    return;
-  }
+  if (state.status === 'speaking') stopSpeech();
   ensureListenHandlers().toggleListen();
+}
+
+function toggleContinuousSession() {
+  showOverlay();
+  if (state.status === 'speaking') stopSpeech();
+  ensureListenHandlers().toggleContinuousSession();
 }
 
 function clearListenTimeout() {
@@ -239,7 +248,10 @@ function registerConfiguredHotkey() {
   const settings = getSettings();
   if (settings.pressStyle === 'hold' && registerNativeHoldHotkey(settings.hotkey)) return;
 
-  if (!globalShortcut.register(settings.hotkey, toggleListen)) {
+  const handler =
+    settings.pressStyle === 'toggle' ? toggleListen : toggleContinuousSession;
+
+  if (!globalShortcut.register(settings.hotkey, handler)) {
     showSidecarError(`Could not register global hotkey: ${settings.hotkey}`);
     return;
   }
@@ -289,9 +301,9 @@ async function runTurn(transcript) {
     conversation.appendAssistant(answer);
     state.error = null;
     state.lastTurnFailed = false;
-    if (!state.muted && settings.ttsEnabled) state.status = 'speaking';
+    if (TTS_ENABLED && !state.muted && settings.ttsEnabled) state.status = 'speaking';
     sendState();
-    if (!state.muted && settings.ttsEnabled) {
+    if (TTS_ENABLED && !state.muted && settings.ttsEnabled) {
       await speakAnswer(client, answer);
     } else {
       state.status = 'idle';
@@ -324,11 +336,12 @@ async function restartSidecar() {
 
 function registerIpcHandlers() {
   ipcMain.handle('set-mode', (event, mode) => {
-    if (!isOverlaySender(event) || !MODES.has(mode)) {
+    const nextMode = typeof mode === 'string' ? mode.trim().toLowerCase() : '';
+    if (!isOverlaySender(event) || !MODES.has(nextMode)) {
       return stateSnapshot();
     }
 
-    conversation.setMode(mode);
+    conversation.setMode(nextMode);
     sendState();
     return stateSnapshot();
   });
@@ -345,6 +358,7 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle('toggle-mute', (event) => {
+    if (!TTS_ENABLED) return stateSnapshot();
     if (!isOverlaySender(event)) return stateSnapshot();
     state.muted = !state.muted;
     if (state.muted) stopSpeech();

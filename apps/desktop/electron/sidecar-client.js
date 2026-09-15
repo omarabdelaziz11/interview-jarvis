@@ -51,10 +51,15 @@ function listenStop() {
   return request('/listen/stop', { method: 'POST', timeoutMs: STOP_TIMEOUT_MS });
 }
 
+function listenStatus() {
+  return request('/listen/status');
+}
+
 module.exports = {
   BASE_URL,
   health,
   devices,
   listenStart,
   listenStop,
+  listenStatus,
 };

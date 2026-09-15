@@ -21,7 +21,7 @@ function createManager(overrides = {}) {
   };
   const settingsProvider = () => ({
     sidecarPython: 'python',
-    whisperModel: 'base',
+    whisperModel: 'small',
     ...(overrides.settings || {}),
   });
   const spawnProcess = () => {
