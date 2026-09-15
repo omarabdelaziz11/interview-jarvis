@@ -1,0 +1,15 @@
+﻿node_modules/
+dist/
+out/
+.env
+*.pyc
+__pycache__/
+.venv/
+venv/
+*.wav
+*.log
+.DS_Store
+apps/desktop/config.json
+.worktrees/
+worktrees/
+.superpowers/
