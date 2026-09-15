@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 
 from app.audio_capture import SESSION
 from app.devices import list_devices
@@ -8,13 +9,14 @@ from app.schema import (
     StartListenRequest,
     TranscriptResponse,
 )
+from app.transcribe import transcribe, whisper_ready
 
 app = FastAPI(title="Jarvis Sidecar")
 
 
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
-    return HealthResponse(ok=True, whisper_ready=False)
+    return HealthResponse(ok=True, whisper_ready=whisper_ready())
 
 
 @app.get("/devices", response_model=DevicesResponse)
@@ -36,9 +38,20 @@ def listen_start(body: StartListenRequest) -> dict[str, str]:
 
 
 @app.post("/listen/stop", response_model=TranscriptResponse)
-def listen_stop() -> TranscriptResponse:
-    _audio, _sample_rate, duration = SESSION.stop()
-    return TranscriptResponse(text="", duration_sec=duration)
+def listen_stop() -> TranscriptResponse | JSONResponse:
+    audio, sample_rate, duration = SESSION.stop()
+    for attempt in range(2):
+        try:
+            text = transcribe(audio, sample_rate)
+            return TranscriptResponse(text=text, duration_sec=duration)
+        except Exception as error:
+            if attempt == 1:
+                return JSONResponse(
+                    status_code=500,
+                    content={"error": str(error)},
+                )
+
+    raise RuntimeError("unreachable")
 
 
 def run() -> None:
