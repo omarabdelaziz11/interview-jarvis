@@ -51,10 +51,12 @@ capture and the second stops it. Captures auto-stop after 180 seconds.
 - **Pick mic/loopback in Settings**: select valid audio devices and retry.
 - **Audio engine reconnecting…**: verify the Sidecar Python path and venv
   dependencies. The app retries the sidecar automatically.
-- **Invalid key invalid — open Settings**: replace the OpenAI API key.
+- **Invalid key — open Settings**: replace the OpenAI API key.
 - **Rate limited — wait and retry**: wait for the API limit to reset.
 - **Transcription failed — try again**: retry; confirm the Whisper model can
   load locally.
+- **Nothing heard**: speak closer to the selected microphone and confirm it is
+  not muted.
 
 ## Capture-protection caveat
 

@@ -2,6 +2,7 @@ import numpy as np
 from fastapi.testclient import TestClient
 
 import app.main as main
+from app.audio_capture import AudioDeviceError
 
 client = TestClient(main.app)
 
@@ -53,8 +54,20 @@ def test_listen_stop_returns_error_after_retry(monkeypatch):
     response = client.post("/listen/stop")
 
     assert response.status_code == 500
-    assert response.json() == {"error": "model unavailable"}
+    assert response.json() == {"error": "Transcription failed"}
     assert attempts == 2
+
+
+def test_listen_start_maps_device_errors_to_safe_client_detail(monkeypatch):
+    def fail_start(**_kwargs):
+        raise AudioDeviceError("C:\\private\\device\\path")
+
+    monkeypatch.setattr(main.SESSION, "start", fail_start)
+
+    response = client.post("/listen/start", json={})
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Could not open selected audio device"}
 
 
 def test_health_reports_whisper_readiness(monkeypatch):

@@ -6,6 +6,8 @@ const { getSettings } = require('./settings');
 
 const DEFAULT_HEALTH_TIMEOUT_MS = 30_000;
 const HEALTH_INTERVAL_MS = 2_000;
+const HEALTH_FAILURE_THRESHOLD = 3;
+const FAILED_RETRY_DELAY_MS = 30_000;
 const MAX_RESTARTS = 5;
 
 function delay(milliseconds) {
@@ -19,12 +21,15 @@ class SidecarManager {
     this.spawnProcess = options.spawnProcess || spawn;
     this.delayFn = options.delayFn || delay;
     this.healthIntervalMs = options.healthIntervalMs ?? HEALTH_INTERVAL_MS;
+    this.healthFailureThreshold = options.healthFailureThreshold ?? HEALTH_FAILURE_THRESHOLD;
+    this.failedRetryDelayMs = options.failedRetryDelayMs ?? FAILED_RETRY_DELAY_MS;
     this.sidecarDir =
       options.sidecarDir || path.resolve(__dirname, '..', '..', '..', 'services', 'sidecar');
     this.process = null;
     this.restartTimer = null;
     this.healthPollTimer = null;
     this.restartCount = 0;
+    this.consecutiveHealthFailures = 0;
     this.recovering = false;
     this.stopping = true;
     this.statusListeners = new Set();
@@ -54,6 +59,7 @@ class SidecarManager {
     }
     this.stopping = false;
     this.restartCount = 0;
+    this.consecutiveHealthFailures = 0;
     this.recovering = false;
     this.spawn();
     this.startHealthPolling();
@@ -81,6 +87,7 @@ class SidecarManager {
       const result = await this.client.health();
       if (result?.ok) {
         this.restartCount = 0;
+        this.consecutiveHealthFailures = 0;
         this.recovering = false;
         this.emitStatus('healthy', { health: result });
         return;
@@ -90,6 +97,8 @@ class SidecarManager {
     }
 
     if (this.stopping || this.restartTimer || this.recovering) return;
+    this.consecutiveHealthFailures += 1;
+    if (this.consecutiveHealthFailures < this.healthFailureThreshold) return;
 
     if (this.process) {
       this.recovering = true;
@@ -135,6 +144,13 @@ class SidecarManager {
     if (this.restartTimer) return;
     if (this.restartCount >= MAX_RESTARTS) {
       this.emitStatus('failed', detail);
+      this.restartTimer = setTimeout(() => {
+        this.restartTimer = null;
+        if (this.stopping) return;
+        this.restartCount = 0;
+        this.consecutiveHealthFailures = 0;
+        this.spawn();
+      }, this.failedRetryDelayMs);
       return;
     }
 
@@ -161,6 +177,7 @@ class SidecarManager {
         const result = await this.client.health();
         if (result?.ok) {
           this.restartCount = 0;
+          this.consecutiveHealthFailures = 0;
           this.recovering = false;
           this.emitStatus('healthy', { health: result });
           return result;
@@ -205,4 +222,9 @@ class SidecarManager {
   }
 }
 
-module.exports = { SidecarManager, HEALTH_INTERVAL_MS, MAX_RESTARTS };
+module.exports = {
+  SidecarManager,
+  HEALTH_FAILURE_THRESHOLD,
+  HEALTH_INTERVAL_MS,
+  MAX_RESTARTS,
+};

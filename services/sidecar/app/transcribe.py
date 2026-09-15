@@ -30,11 +30,15 @@ def get_model():
 
 
 def whisper_ready() -> bool:
+    return _model is not None
+
+
+def warm_model() -> None:
     try:
         get_model()
-        return True
     except Exception:
-        return False
+        # Transcription will retry loading and return a client-safe error.
+        pass
 
 
 def transcribe(audio: np.ndarray, sample_rate: int) -> str:

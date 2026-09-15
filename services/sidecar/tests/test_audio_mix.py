@@ -62,3 +62,29 @@ def test_auto_stop_stashes_audio_until_stop_consumes_it():
     np.testing.assert_array_equal(audio, captured[:, 0])
     assert sample_rate == SAMPLE_RATE
     assert duration > 0
+
+
+def test_default_mic_opens_when_loopback_is_selected(monkeypatch):
+    session = AudioSession()
+    opened_devices = []
+
+    class FakeStream:
+        def start(self):
+            pass
+
+        def stop(self):
+            pass
+
+        def close(self):
+            pass
+
+    def fake_open_stream(device_id, chunks):
+        opened_devices.append(device_id)
+        return FakeStream(), SAMPLE_RATE
+
+    monkeypatch.setattr(session, "_open_stream", fake_open_stream)
+
+    session.start(mic_device_id=None, loopback_device_id="pyaudio:7")
+    session.stop()
+
+    assert opened_devices == [None, "pyaudio:7"]

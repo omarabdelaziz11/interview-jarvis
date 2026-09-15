@@ -4,6 +4,7 @@ const path = require('path');
 const sidecarClient = require('./sidecar-client');
 const { SidecarManager } = require('./sidecar-manager');
 const { getSettings, saveSettings } = require('./settings');
+const { toPublicSettings } = require('./public-settings');
 const conversation = require('./conversation');
 const openaiClient = require('./openai-client');
 const { systemFor } = require('./prompts');
@@ -119,6 +120,12 @@ function showSidecarError(message) {
   sendState();
 }
 
+function showOverlay() {
+  if (overlay && !overlay.isDestroyed() && !overlay.isVisible()) {
+    overlay.showInactive();
+  }
+}
+
 function ensureListenHandlers() {
   if (listenHandlers) return listenHandlers;
   listenHandlers = createListenHandlers(state, {
@@ -132,6 +139,7 @@ function ensureListenHandlers() {
 }
 
 async function startListen() {
+  showOverlay();
   if (state.status === 'speaking') stopSpeech();
   return ensureListenHandlers().startListen();
 }
@@ -141,6 +149,7 @@ function stopListen() {
 }
 
 function toggleListen() {
+  showOverlay();
   if (state.status === 'speaking') {
     void startListen();
     return;
@@ -381,7 +390,7 @@ function registerIpcHandlers() {
 
   ipcMain.handle('settings-get', (event) => {
     if (!isSettingsSender(event)) throw new Error('Unauthorized settings request');
-    return getSettings();
+    return toPublicSettings(getSettings());
   });
 
   ipcMain.handle('settings-save', async (event, partial) => {
@@ -400,7 +409,7 @@ function registerIpcHandlers() {
     if (!saved.ttsEnabled && previous.ttsEnabled) {
       stopSpeech();
     }
-    return saved;
+    return toPublicSettings(saved);
   });
 
   ipcMain.handle('sidecar-devices', async (event) => {

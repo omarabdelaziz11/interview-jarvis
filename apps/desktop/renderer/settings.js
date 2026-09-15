@@ -1,7 +1,6 @@
 const form = document.querySelector('#settings-form');
 const statusElement = document.querySelector('#form-status');
 const refreshButton = document.querySelector('#refresh-devices');
-let loadedApiKey = '';
 const fields = {
   apiKey: document.querySelector('#api-key'),
   model: document.querySelector('#model'),
@@ -18,6 +17,25 @@ const fields = {
 function setStatus(message, isError = false) {
   statusElement.textContent = message;
   statusElement.dataset.error = String(isError);
+}
+
+function acceleratorFromKeyboardEvent(event) {
+  const aliases = {
+    ' ': 'Space',
+    ArrowUp: 'Up',
+    ArrowDown: 'Down',
+    ArrowLeft: 'Left',
+    ArrowRight: 'Right',
+  };
+  const modifierKeys = new Set(['Alt', 'Control', 'Meta', 'Shift']);
+  if (modifierKeys.has(event.key)) return null;
+
+  const key = aliases[event.key] || (event.key.length === 1 ? event.key.toUpperCase() : event.key);
+  const modifiers = [];
+  if (event.ctrlKey || event.metaKey) modifiers.push('CommandOrControl');
+  if (event.altKey) modifiers.push('Alt');
+  if (event.shiftKey) modifiers.push('Shift');
+  return [...modifiers, key].join('+');
 }
 
 function encodeDeviceId(value) {
@@ -93,8 +111,8 @@ async function loadDevices(selected = {}) {
 }
 
 function renderSettings(settings) {
-  loadedApiKey = settings.apiKey || '';
-  fields.apiKey.value = loadedApiKey;
+  fields.apiKey.value = '';
+  fields.apiKey.placeholder = settings.hasApiKey ? 'Saved securely — enter a new key to replace' : '';
   fields.model.value = settings.model || '';
   fields.whisperModel.value = settings.whisperModel || '';
   fields.hotkey.value = settings.hotkey || '';
@@ -132,7 +150,7 @@ form.addEventListener('submit', async (event) => {
       loopbackDeviceId: decodeDeviceId(fields.loopbackDeviceId.value),
       sidecarPython: fields.sidecarPython.value,
     };
-    if (fields.apiKey.value !== loadedApiKey) changes.apiKey = fields.apiKey.value;
+    if (fields.apiKey.value.trim()) changes.apiKey = fields.apiKey.value;
     const saved = await window.jarvis.saveSettings(changes);
     renderSettings(saved);
     setStatus('Settings saved.');
@@ -149,5 +167,11 @@ refreshButton.addEventListener('click', () =>
     loopbackDeviceId: decodeDeviceId(fields.loopbackDeviceId.value),
   }),
 );
+
+fields.hotkey.addEventListener('keydown', (event) => {
+  event.preventDefault();
+  const accelerator = acceleratorFromKeyboardEvent(event);
+  if (accelerator) fields.hotkey.value = accelerator;
+});
 
 initialize();

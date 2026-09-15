@@ -94,7 +94,7 @@ describe('SidecarManager', () => {
     assert.ok(manager.restartTimer);
   });
 
-  it('kills a running process when health fails and schedules one restart', async () => {
+  it('requires three consecutive health failures before restarting', async () => {
     let killed = false;
     const child = createMockChild();
     child.kill = () => {
@@ -111,10 +111,31 @@ describe('SidecarManager', () => {
     manager.start();
 
     await manager.pollHealth();
+    await manager.pollHealth();
+
+    assert.equal(killed, false);
+    assert.equal(manager.restartCount, 0);
+
+    await manager.pollHealth();
 
     assert.equal(killed, true);
     assert.equal(manager.restartCount, 1);
     assert.ok(manager.restartTimer);
+  });
+
+  it('clears consecutive health failures after an ok response', async () => {
+    let healthy = false;
+    const { manager } = createManager({
+      client: { health: async () => ({ ok: healthy }) },
+    });
+    manager.stopping = false;
+
+    await manager.pollHealth();
+    await manager.pollHealth();
+    healthy = true;
+    await manager.pollHealth();
+
+    assert.equal(manager.consecutiveHealthFailures, 0);
   });
 
   it('does not schedule overlapping restarts', async () => {

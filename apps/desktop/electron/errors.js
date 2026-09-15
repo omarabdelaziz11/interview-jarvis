@@ -1,7 +1,7 @@
 const OVERLAY_ERRORS = Object.freeze({
   noDevices: 'Pick mic/loopback in Settings',
   transcription: 'Transcription failed — try again',
-  invalidKey: 'Invalid key invalid — open Settings',
+  invalidKey: 'Invalid key — open Settings',
   rateLimited: 'Rate limited — wait and retry',
   sidecarDown: 'Audio engine reconnecting…',
   silence: 'Nothing heard',

@@ -10,6 +10,7 @@ const {
 describe('overlay error mapping', () => {
   it('maps OpenAI authentication and rate-limit errors', () => {
     assert.equal(openAiErrorMessage({ status: 401 }), OVERLAY_ERRORS.invalidKey);
+    assert.equal(OVERLAY_ERRORS.invalidKey, 'Invalid key — open Settings');
     assert.equal(openAiErrorMessage({ response: { status: 429 } }), OVERLAY_ERRORS.rateLimited);
     assert.equal(openAiErrorMessage(new Error('network')), OVERLAY_ERRORS.openAi);
   });

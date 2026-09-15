@@ -12,6 +12,10 @@ DEFAULT_DEVICE_SAMPLE_RATE = 48000
 PYAUDIO_DEVICE_PREFIX = "pyaudio:"
 
 
+class AudioDeviceError(RuntimeError):
+    pass
+
+
 def resample_audio(
     audio: np.ndarray,
     source_rate: int,
@@ -85,7 +89,7 @@ class AudioSession:
             self._recording = True
 
             try:
-                if mic_device_id is not None or loopback_device_id is None:
+                if mic_device_id != "off":
                     stream, self._mic_sample_rate = self._open_stream(
                         mic_device_id,
                         self._mic_chunks,
@@ -102,10 +106,10 @@ class AudioSession:
                         stream.start_stream()
                     else:
                         stream.start()
-            except Exception:
+            except Exception as error:
                 self._recording = False
                 self._close_streams()
-                raise
+                raise AudioDeviceError("Could not open selected audio device") from error
 
             self._timer = threading.Timer(max_seconds, self._auto_stop)
             self._timer.daemon = True
