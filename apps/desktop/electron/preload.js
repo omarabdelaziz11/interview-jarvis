@@ -16,4 +16,7 @@ contextBridge.exposeInMainWorld('jarvis', {
   copyLast: () => ipcRenderer.invoke('copy-last'),
   hide: () => ipcRenderer.invoke('hide-overlay'),
   openSettings: () => ipcRenderer.invoke('open-settings'),
+  getSettings: () => ipcRenderer.invoke('settings-get'),
+  saveSettings: (settings) => ipcRenderer.invoke('settings-save', settings),
+  getDevices: () => ipcRenderer.invoke('sidecar-devices'),
 });

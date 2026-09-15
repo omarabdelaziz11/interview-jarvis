@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Jarvis Settings</title>
+    <link rel="stylesheet" href="./settings.css" />
+    <script src="./settings.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="eyebrow">Jarvis</p>
+        <h1>Settings</h1>
+        <p>Configure the assistant and local audio sidecar.</p>
+      </header>
+
+      <form id="settings-form">
+        <section>
+          <h2>Assistant</h2>
+          <label>
+            OpenAI API key
+            <input id="api-key" type="password" autocomplete="off" spellcheck="false" />
+          </label>
+          <label>
+            Chat model
+            <input id="model" type="text" required maxlength="200" spellcheck="false" />
+          </label>
+          <label>
+            Default mode
+            <select id="default-mode">
+              <option value="jarvis">Jarvis</option>
+              <option value="interview">Interview</option>
+            </select>
+          </label>
+          <label class="check-row">
+            <input id="tts-enabled" type="checkbox" />
+            Enable text-to-speech by default
+          </label>
+        </section>
+
+        <section>
+          <h2>Controls</h2>
+          <label>
+            Global hotkey
+            <input id="hotkey" type="text" readonly />
+          </label>
+          <label>
+            Press style
+            <select id="press-style">
+              <option value="hold">Hold to listen</option>
+              <option value="toggle">Press to toggle</option>
+            </select>
+          </label>
+        </section>
+
+        <section>
+          <h2>Audio and sidecar</h2>
+          <label>
+            Microphone
+            <select id="mic-device"></select>
+          </label>
+          <label>
+            System audio
+            <select id="loopback-device"></select>
+          </label>
+          <label>
+            Whisper model
+            <input id="whisper-model" type="text" required maxlength="200" spellcheck="false" />
+          </label>
+          <label>
+            Python executable
+            <input id="sidecar-python" type="text" required maxlength="1024" spellcheck="false" />
+          </label>
+          <button id="refresh-devices" class="secondary" type="button">Refresh devices</button>
+        </section>
+
+        <footer>
+          <p id="form-status" role="status" aria-live="polite"></p>
+          <button type="submit">Save settings</button>
+        </footer>
+      </form>
+    </main>
+  </body>
+</html>

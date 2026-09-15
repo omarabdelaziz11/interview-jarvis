@@ -1,0 +1,156 @@
+:root {
+  color-scheme: dark;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  background: #111617;
+  color: #e6efed;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  width: min(100%, 720px);
+  margin: 0 auto;
+  padding: 28px;
+}
+
+header {
+  margin-bottom: 24px;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  color: #70c9bf;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0;
+  font-size: 28px;
+}
+
+header > p:last-child {
+  margin: 8px 0 0;
+  color: #91a19f;
+}
+
+form {
+  display: grid;
+  gap: 16px;
+}
+
+section {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 14px;
+  background: #192021;
+}
+
+h2 {
+  margin: 0 0 2px;
+  font-size: 15px;
+}
+
+label {
+  display: grid;
+  gap: 7px;
+  color: #b9c6c4;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+input,
+select,
+button {
+  font: inherit;
+}
+
+input,
+select {
+  width: 100%;
+  border: 1px solid #364443;
+  border-radius: 8px;
+  padding: 10px 11px;
+  background: #101516;
+  color: #e6efed;
+  outline: none;
+}
+
+input:focus,
+select:focus {
+  border-color: #70c9bf;
+  box-shadow: 0 0 0 3px rgb(112 201 191 / 12%);
+}
+
+input[readonly] {
+  color: #91a19f;
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+}
+
+.check-row input {
+  width: auto;
+  accent-color: #70c9bf;
+}
+
+button {
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  background: #d6ebe8;
+  color: #172221;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+button:hover,
+button:focus-visible {
+  filter: brightness(1.08);
+  outline: 2px solid #70c9bf;
+  outline-offset: 2px;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.secondary {
+  justify-self: start;
+  border: 1px solid #40504e;
+  background: transparent;
+  color: #b9c6c4;
+}
+
+footer {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+}
+
+#form-status {
+  margin: 0 auto 0 0;
+  color: #8cb8b2;
+  font-size: 12px;
+}
+
+#form-status[data-error="true"] {
+  color: #f0a0a0;
+}

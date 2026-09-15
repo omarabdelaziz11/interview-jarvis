@@ -104,6 +104,9 @@ document
   .querySelector('#clear-button')
   .addEventListener('click', () => invoke(window.jarvis.clearConversation));
 copyButton.addEventListener('click', () => invoke(window.jarvis.copyLast));
+document
+  .querySelector('#settings-button')
+  .addEventListener('click', () => invoke(window.jarvis.openSettings));
 document.querySelector('#hide-button').addEventListener('click', () => invoke(window.jarvis.hide));
 
 window.jarvis.onState(renderState);
