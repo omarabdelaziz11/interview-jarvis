@@ -4,12 +4,13 @@ const path = require('path');
 const sidecarClient = require('./sidecar-client');
 const { SidecarManager } = require('./sidecar-manager');
 const { getSettings, saveSettings } = require('./settings');
+const conversation = require('./conversation');
+const openaiClient = require('./openai-client');
+const { systemFor } = require('./prompts');
 
 const MODES = new Set(['jarvis', 'interview']);
 const state = {
   status: 'idle',
-  mode: 'jarvis',
-  messages: [],
   muted: false,
   error: null,
   heard: null,
@@ -28,7 +29,8 @@ sidecarManager.onStatus(({ status }) => {
 function stateSnapshot() {
   return {
     ...state,
-    messages: state.messages.map((message) => ({ ...message })),
+    mode: conversation.getMode(),
+    messages: conversation.getMessages(),
   };
 }
 
@@ -56,6 +58,53 @@ function showSidecarError(message) {
   sendState();
 }
 
+async function runTurn(transcript) {
+  state.status = 'thinking';
+  state.error = null;
+  sendState();
+
+  const text = typeof transcript === 'string' ? transcript.trim() : '';
+  if (!text) {
+    state.status = 'idle';
+    state.error = 'Nothing heard.';
+    state.heard = null;
+    sendState();
+    return null;
+  }
+
+  state.heard = text;
+  conversation.appendUser(text);
+  sendState();
+
+  try {
+    const settings = getSettings();
+    if (!settings.apiKey) {
+      throw new Error('Missing API key');
+    }
+
+    const client = openaiClient.createClient(settings.apiKey);
+    const answer = await openaiClient.chat(client, {
+      model: settings.model,
+      system: systemFor(conversation.getMode()),
+      messages: conversation.getMessages(),
+    });
+    if (!answer) {
+      throw new Error('Empty OpenAI response');
+    }
+
+    conversation.appendAssistant(answer);
+    state.status = 'idle';
+    state.error = null;
+    sendState();
+    return answer;
+  } catch {
+    state.status = 'error';
+    state.error = 'Could not get an answer. Check Settings and try again.';
+    sendState();
+    return null;
+  }
+}
+
 async function restartSidecar() {
   try {
     await sidecarManager.stop();
@@ -77,14 +126,14 @@ function registerIpcHandlers() {
       return stateSnapshot();
     }
 
-    state.mode = mode;
+    conversation.setMode(mode);
     sendState();
     return stateSnapshot();
   });
 
   ipcMain.handle('clear-conversation', (event) => {
     if (!isOverlaySender(event)) return stateSnapshot();
-    state.messages = [];
+    conversation.clear();
     state.error = null;
     state.heard = null;
     sendState();
@@ -100,7 +149,7 @@ function registerIpcHandlers() {
 
   ipcMain.handle('copy-last', (event) => {
     if (!isOverlaySender(event)) return false;
-    const lastMessage = state.messages.at(-1);
+    const lastMessage = conversation.getMessages().at(-1);
     if (!lastMessage || typeof lastMessage.content !== 'string') return false;
     clipboard.writeText(lastMessage.content);
     return true;
@@ -209,7 +258,7 @@ function createSettingsWindow() {
 
 app.whenReady().then(() => {
   registerIpcHandlers();
-  state.mode = getSettings().defaultMode;
+  conversation.setMode(getSettings().defaultMode);
   createOverlay();
   sidecarManager.start();
   void sidecarManager.ensureHealthy().catch(() => {
@@ -233,3 +282,5 @@ app.on('before-quit', (event) => {
     app.quit();
   });
 });
+
+module.exports = { runTurn };

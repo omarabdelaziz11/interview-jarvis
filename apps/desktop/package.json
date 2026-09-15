@@ -5,6 +5,7 @@
   "main": "electron/main.js",
   "scripts": {
     "start": "electron .",
+    "test": "node --test electron/*.test.js",
     "test:sidecar-manager": "node --test electron/sidecar-manager.test.js"
   },
   "devDependencies": {
