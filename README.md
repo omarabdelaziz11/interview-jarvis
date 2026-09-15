@@ -19,7 +19,6 @@ Two modes:
 
 ## Quick start
 
-From PowerShell in the repo root (`D:\Interview Agent` — do not use old `.worktrees` copies):
 
 ### 1. Python sidecar (audio + Whisper)
 
@@ -113,17 +112,6 @@ Approximate local footprint (not checked into git):
 | Whisper `small` model cache | ~465 MB (`tiny` ≈ 75 MB) |
 
 Whisper models are capped to `tiny` / `base` / `small` in Settings to avoid accidental multi‑GB downloads. Runtime sidecar deps exclude pytest/httpx extras (`requirements-dev.txt` for tests only).
-
-## Security notes
-
-- Overlay **and** Settings use Electron `setContentProtection` (usually blank in Zoom/Teams/OBS).
-- Renderer: `contextIsolation`, `sandbox`, no Node in pages; CSP with `connect-src 'none'`.
-- Windows cannot navigate away or open popups from the overlay/settings pages.
-- Chat / Whisper models are allowlisted; sidecar Python must be an existing `python` / `python.exe`.
-- API key encrypted via `safeStorage` in `%APPDATA%\jarvis-desktop\`.
-- Sidecar binds `127.0.0.1:8765` and requires a per-launch shared token from Electron (other local processes cannot call listen APIs without it).
-- Screen scans and chat transcripts are sent to OpenAI — review OpenAI data controls if that matters for your use case.
-
 ## Troubleshooting
 
 | Message | What to do |
@@ -137,9 +125,6 @@ Whisper models are capped to `tiny` / `base` / `small` in Settings to avoid acci
 | Nothing heard | Speak/play audio; pause briefly so endpointing can finish; check the correct output device for loopback |
 | Scan says no clear question | Ensure questions are visible on the **primary** monitor; try again after scrolling the list into view |
 
-## Capture protection
-
-The overlay (and settings) use Electron `setContentProtection` so they are usually blank/hidden in Zoom, Teams, Discord, OBS, Game Bar, etc. Always verify with your capture tool. It cannot hide the UI from a phone camera or every exotic capture path.
 
 ## Privacy & secrets
 
@@ -157,7 +142,3 @@ cd ..\..\services\sidecar
 .\.venv\Scripts\python -m pip install -r requirements-dev.txt
 .\.venv\Scripts\python -m pytest
 ```
-
-## License
-
-Add a license of your choice before publishing if you need one.
