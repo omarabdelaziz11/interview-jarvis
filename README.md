@@ -72,7 +72,7 @@ The API key is encrypted with Electron `safeStorage` (Windows DPAPI) under your 
 | Button | Modes | What it does |
 |--------|-------|----------------|
 | **Listen** / **Listening** | All | Same as the global hotkey. Arms or disarms continuous listening (or follows Settings **Press style**: always-listen, hold, or one-shot toggle). Label shows **Listening** while a session is armed. |
-| **Scan screen** | Interview only | One click captures the **primary monitor** (no picker), sends it to OpenAI vision, and answers visible interview questions in the overlay. Numbered question lists (e.g. TOC/sidebar) get numbered answers. Overlay stays capture-protected so it usually does not appear in the screenshot. |
+| **Scan screen** | Interview only | Captures primary monitor (≤1400px JPEG), sends to `gpt-4o` with vision `detail: high` (**~1k image tokens**, not ~35k on mini). Reads sidebar question lists without zoom; numbered lists get numbered answers. |
 | **Clear** | All | Clears the conversation history in the overlay. |
 | **Copy** | All | Copies the last assistant reply to the clipboard. |
 | **Settings** | All | Opens the settings window (API key, devices, hotkey, models, sidecar Python path). |

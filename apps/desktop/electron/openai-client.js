@@ -17,7 +17,7 @@ async function chat(client, { model, system, messages }) {
   return response.choices[0]?.message?.content?.trim() || '';
 }
 
-async function chatWithImage(client, { model, system, prompt, dataUrl }) {
+async function chatWithImage(client, { model, system, prompt, dataUrl, detail = 'high' }) {
   if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) {
     throw new TypeError('dataUrl must be an image data URL');
   }
@@ -30,14 +30,18 @@ async function chatWithImage(client, { model, system, prompt, dataUrl }) {
         role: 'user',
         content: [
           { type: 'text', text: prompt },
-          { type: 'image_url', image_url: { url: dataUrl, detail: 'high' } },
+          { type: 'image_url', image_url: { url: dataUrl, detail } },
         ],
       },
     ],
     temperature: 0.4,
   });
 
-  return response.choices[0]?.message?.content?.trim() || '';
+  const answer = response.choices[0]?.message?.content?.trim() || '';
+  return {
+    answer,
+    usage: response.usage || null,
+  };
 }
 
 module.exports = { createClient, chat, chatWithImage };

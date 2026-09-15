@@ -203,16 +203,28 @@ async function scanPrimaryScreen() {
       throw new Error('Missing API key');
     }
 
-    const { dataUrl } = await capturePrimaryScreenPngDataUrl();
+    const { dataUrl, width, height } = await capturePrimaryScreenPngDataUrl();
     const client = openaiClient.createClient(settings.apiKey);
-    const answer = await openaiClient.chatWithImage(client, {
-      // Vision-capable mini model (settings.model may be text-only)
-      model: 'gpt-4o-mini',
+    // No OpenAI "medium" detail — only low / high / auto.
+    // gpt-4o-mini + high ≈ 35k tiles. gpt-4o + high ≈ 0.8–1.2k tiles (reads small TOC text).
+    // gpt-4o + low ≈ 85 image tokens but often misses dense sidebar lists unless zoomed.
+    const { answer, usage } = await openaiClient.chatWithImage(client, {
+      model: 'gpt-4o',
       system: systemForScreenScan(),
       prompt:
         'Read the entire screenshot, including sidebars and numbered question lists. Answer every interview question you can see. If there are multiple, number the answers to match the on-screen numbering. Reply with only the answers.',
       dataUrl,
+      detail: 'high',
     });
+    console.log(
+      '[scan]',
+      JSON.stringify({
+        width,
+        height,
+        payloadKb: Math.round((dataUrl.length * 0.75) / 1024),
+        usage,
+      }),
+    );
 
     if (!answer) {
       throw new Error('Empty OpenAI response');
