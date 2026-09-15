@@ -1,4 +1,5 @@
 const MAX_LISTEN_SECONDS = 180;
+const { sidecarErrorMessage } = require('./errors');
 
 function canStartListen(status) {
   return status === 'idle' || status === 'error';
@@ -57,8 +58,8 @@ function createListenHandlers(state, deps) {
       if (state.status === 'listening') {
         listenTimeout = setTimeoutFn(() => void stopListen(), maxSeconds * 1000);
       }
-    } catch {
-      showSidecarError('Could not start listening. Check the local audio service.');
+    } catch (error) {
+      showSidecarError(sidecarErrorMessage(error, 'start'));
     } finally {
       listenStartRequest = releasePendingListenStart(listenStartRequest, request);
     }
@@ -76,8 +77,8 @@ function createListenHandlers(state, deps) {
       if (listenStartRequest) await listenStartRequest;
       const result = await sidecarClient.listenStop();
       await runTurn(result?.text);
-    } catch {
-      showSidecarError('Could not stop listening. Check the local audio service.');
+    } catch (error) {
+      showSidecarError(sidecarErrorMessage(error, 'stop'));
     }
   }
 

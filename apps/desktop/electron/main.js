@@ -8,6 +8,7 @@ const conversation = require('./conversation');
 const openaiClient = require('./openai-client');
 const { systemFor } = require('./prompts');
 const { createListenHandlers } = require('./listen-pipeline');
+const { OVERLAY_ERRORS, openAiErrorMessage } = require('./errors');
 const tts = require('./tts');
 
 const MODES = new Set(['jarvis', 'interview']);
@@ -29,8 +30,12 @@ let speechAbortController = null;
 let activePlaybackId = null;
 const sidecarManager = new SidecarManager();
 sidecarManager.onStatus(({ status }) => {
-  if (status === 'failed') {
-    showSidecarError('Local audio service stopped and could not be restarted. Check Settings.');
+  if (status === 'restarting' || status === 'failed') {
+    showSidecarError(OVERLAY_ERRORS.sidecarDown);
+  } else if (status === 'healthy' && state.error === OVERLAY_ERRORS.sidecarDown) {
+    state.error = null;
+    state.status = 'idle';
+    sendState();
   }
 });
 
@@ -246,7 +251,7 @@ async function runTurn(transcript) {
 
   if (!text) {
     state.status = 'idle';
-    state.error = 'Nothing heard.';
+    state.error = OVERLAY_ERRORS.silence;
     state.heard = null;
     sendState();
     return null;
@@ -275,6 +280,7 @@ async function runTurn(transcript) {
     conversation.appendAssistant(answer);
     state.error = null;
     state.lastTurnFailed = false;
+    if (!state.muted && settings.ttsEnabled) state.status = 'speaking';
     sendState();
     if (!state.muted && settings.ttsEnabled) {
       await speakAnswer(client, answer);
@@ -283,9 +289,9 @@ async function runTurn(transcript) {
       sendState();
     }
     return answer;
-  } catch {
+  } catch (error) {
     state.status = 'error';
-    state.error = 'Could not get an answer. Check Settings and try again.';
+    state.error = openAiErrorMessage(error);
     state.lastTurnFailed = true;
     sendState();
     return null;
@@ -297,13 +303,13 @@ async function restartSidecar() {
     await sidecarManager.stop();
     sidecarManager.start();
     await sidecarManager.ensureHealthy();
-    if (state.error?.startsWith('Local audio service')) {
+    if (state.error === OVERLAY_ERRORS.sidecarDown) {
       state.error = null;
       state.status = 'idle';
       sendState();
     }
   } catch {
-    showSidecarError('Local audio service could not be started. Check Settings.');
+    showSidecarError(OVERLAY_ERRORS.sidecarDown);
   }
 }
 
@@ -477,7 +483,7 @@ app.whenReady().then(() => {
   registerConfiguredHotkey();
   sidecarManager.start();
   void sidecarManager.ensureHealthy().catch(() => {
-    showSidecarError('Local audio service could not be started. Check Settings.');
+    showSidecarError(OVERLAY_ERRORS.sidecarDown);
   });
 });
 

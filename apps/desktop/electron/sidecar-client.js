@@ -16,7 +16,10 @@ async function request(pathname, { method = 'GET', body, timeoutMs = DEFAULT_TIM
     const payload = await response.json().catch(() => null);
     if (!response.ok) {
       const detail = payload?.detail || payload?.error || `HTTP ${response.status}`;
-      throw new Error(`Sidecar request failed: ${detail}`);
+      const error = new Error(`Sidecar request failed: ${detail}`);
+      error.status = response.status;
+      error.detail = detail;
+      throw error;
     }
     return payload;
   } catch (error) {
