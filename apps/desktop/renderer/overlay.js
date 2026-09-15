@@ -4,7 +4,9 @@ const heardElement = document.querySelector('#heard');
 const heardText = document.querySelector('#heard-text');
 const messagesElement = document.querySelector('#messages');
 const emptyState = document.querySelector('#empty-state');
+const errorRow = document.querySelector('#error-row');
 const errorElement = document.querySelector('#error');
+const retryButton = document.querySelector('#retry-button');
 const muteButton = document.querySelector('#mute-button');
 const copyButton = document.querySelector('#copy-button');
 const modeButtons = [...document.querySelectorAll('[data-mode]')];
@@ -72,7 +74,8 @@ function renderState(state) {
 
   const error = safeText(state.error);
   errorElement.textContent = error;
-  errorElement.hidden = !error;
+  errorRow.hidden = !error;
+  retryButton.hidden = !(error && heard);
 
   muteButton.textContent = state.muted ? 'Unmute' : 'Mute';
   muteButton.setAttribute('aria-pressed', String(Boolean(state.muted)));
@@ -91,7 +94,7 @@ async function invoke(action) {
     await action();
   } catch {
     errorElement.textContent = 'The action could not be completed.';
-    errorElement.hidden = false;
+    errorRow.hidden = false;
   }
 }
 
@@ -104,6 +107,7 @@ document
   .querySelector('#clear-button')
   .addEventListener('click', () => invoke(window.jarvis.clearConversation));
 copyButton.addEventListener('click', () => invoke(window.jarvis.copyLast));
+retryButton.addEventListener('click', () => invoke(window.jarvis.retryTurn));
 document
   .querySelector('#settings-button')
   .addEventListener('click', () => invoke(window.jarvis.openSettings));

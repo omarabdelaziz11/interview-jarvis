@@ -1,4 +1,4 @@
-const { app, BrowserWindow, clipboard, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, clipboard, globalShortcut, ipcMain, screen } = require('electron');
 const path = require('path');
 
 const sidecarClient = require('./sidecar-client');
@@ -9,6 +9,7 @@ const openaiClient = require('./openai-client');
 const { systemFor } = require('./prompts');
 
 const MODES = new Set(['jarvis', 'interview']);
+const MAX_LISTEN_SECONDS = 180;
 const state = {
   status: 'idle',
   muted: false,
@@ -19,6 +20,9 @@ const state = {
 let overlay = null;
 let settingsWindow = null;
 let quitting = false;
+let listenStartRequest = null;
+let listenTimeout = null;
+let unregisterHotkey = () => {};
 const sidecarManager = new SidecarManager();
 sidecarManager.onStatus(({ status }) => {
   if (status === 'failed') {
@@ -58,12 +62,159 @@ function showSidecarError(message) {
   sendState();
 }
 
+function clearListenTimeout() {
+  if (listenTimeout) {
+    clearTimeout(listenTimeout);
+    listenTimeout = null;
+  }
+}
+
+async function startListen() {
+  if (state.status !== 'idle' && state.status !== 'error') return;
+
+  clearListenTimeout();
+  state.status = 'listening';
+  state.error = null;
+  state.heard = null;
+  sendState();
+
+  const settings = getSettings();
+  const request = sidecarClient.listenStart({
+    mic_device_id: settings.micDeviceId,
+    loopback_device_id: settings.loopbackDeviceId,
+    max_seconds: MAX_LISTEN_SECONDS,
+  });
+  listenStartRequest = request;
+
+  try {
+    await request;
+    if (state.status === 'listening') {
+      listenTimeout = setTimeout(() => void stopListen(), MAX_LISTEN_SECONDS * 1000);
+    }
+  } catch {
+    showSidecarError('Could not start listening. Check the local audio service.');
+  } finally {
+    if (listenStartRequest === request) listenStartRequest = null;
+  }
+}
+
+async function stopListen() {
+  if (state.status !== 'listening') return;
+
+  state.status = 'thinking';
+  state.error = null;
+  clearListenTimeout();
+  sendState();
+
+  try {
+    if (listenStartRequest) await listenStartRequest;
+    const result = await sidecarClient.listenStop();
+    await runTurn(result?.text);
+  } catch {
+    showSidecarError('Could not stop listening. Check the local audio service.');
+  }
+}
+
+function toggleListen() {
+  if (state.status === 'listening') {
+    void stopListen();
+  } else if (state.status === 'idle' || state.status === 'error') {
+    void startListen();
+  }
+}
+
+function nativeHotkeyBinding(accelerator, UiohookKey) {
+  const tokens = accelerator.split('+').map((token) => token.trim()).filter(Boolean);
+  const modifiers = { altKey: false, ctrlKey: false, metaKey: false, shiftKey: false };
+  let keyName = null;
+
+  for (const token of tokens) {
+    const normalized = token.toLowerCase();
+    if (['commandorcontrol', 'cmdorctrl'].includes(normalized)) {
+      modifiers[process.platform === 'darwin' ? 'metaKey' : 'ctrlKey'] = true;
+    } else if (['command', 'cmd', 'super'].includes(normalized)) {
+      modifiers.metaKey = true;
+    } else if (['control', 'ctrl'].includes(normalized)) {
+      modifiers.ctrlKey = true;
+    } else if (['option', 'alt'].includes(normalized)) {
+      modifiers.altKey = true;
+    } else if (normalized === 'shift') {
+      modifiers.shiftKey = true;
+    } else if (keyName === null) {
+      keyName = token.length === 1 ? token.toUpperCase() : token;
+    } else {
+      return null;
+    }
+  }
+
+  const resolvedKeyName =
+    keyName === null
+      ? null
+      : Object.keys(UiohookKey).find((name) => name.toLowerCase() === keyName.toLowerCase());
+  const keycode = resolvedKeyName === null ? undefined : UiohookKey[resolvedKeyName];
+  if (!Number.isInteger(keycode)) return null;
+  return { keycode, modifiers };
+}
+
+function registerNativeHoldHotkey(accelerator) {
+  try {
+    const { uIOhook, UiohookKey } = require('uiohook-napi');
+    const binding = nativeHotkeyBinding(accelerator, UiohookKey);
+    if (!binding) return false;
+
+    let pressed = false;
+    const matches = (event) =>
+      event.keycode === binding.keycode &&
+      Object.entries(binding.modifiers).every(([key, expected]) => event[key] === expected);
+    const onKeyDown = (event) => {
+      if (!pressed && matches(event)) {
+        pressed = true;
+        void startListen();
+      }
+    };
+    const onKeyUp = (event) => {
+      if (pressed && event.keycode === binding.keycode) {
+        pressed = false;
+        void stopListen();
+      }
+    };
+
+    uIOhook.on('keydown', onKeyDown);
+    uIOhook.on('keyup', onKeyUp);
+    uIOhook.start();
+    unregisterHotkey = () => {
+      uIOhook.removeListener('keydown', onKeyDown);
+      uIOhook.removeListener('keyup', onKeyUp);
+      uIOhook.stop();
+    };
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function registerConfiguredHotkey() {
+  unregisterHotkey();
+  unregisterHotkey = () => {};
+  globalShortcut.unregisterAll();
+
+  const settings = getSettings();
+  if (settings.pressStyle === 'hold' && registerNativeHoldHotkey(settings.hotkey)) return;
+
+  if (!globalShortcut.register(settings.hotkey, toggleListen)) {
+    showSidecarError(`Could not register global hotkey: ${settings.hotkey}`);
+    return;
+  }
+  unregisterHotkey = () => globalShortcut.unregister(settings.hotkey);
+}
+
 async function runTurn(transcript) {
+  const text = typeof transcript === 'string' ? transcript.trim() : '';
+  const retrying = state.status === 'error' && Boolean(state.error) && state.heard === text;
   state.status = 'thinking';
   state.error = null;
   sendState();
 
-  const text = typeof transcript === 'string' ? transcript.trim() : '';
   if (!text) {
     state.status = 'idle';
     state.error = 'Nothing heard.';
@@ -73,7 +224,7 @@ async function runTurn(transcript) {
   }
 
   state.heard = text;
-  conversation.appendUser(text);
+  if (!retrying) conversation.appendUser(text);
   sendState();
 
   try {
@@ -167,6 +318,12 @@ function registerIpcHandlers() {
     return true;
   });
 
+  ipcMain.handle('retry-turn', async (event) => {
+    if (!isOverlaySender(event) || !state.error || !state.heard) return false;
+    await runTurn(state.heard);
+    return true;
+  });
+
   ipcMain.handle('settings-get', (event) => {
     if (!isSettingsSender(event)) throw new Error('Unauthorized settings request');
     return getSettings();
@@ -181,6 +338,9 @@ function registerIpcHandlers() {
       saved.whisperModel !== previous.whisperModel
     ) {
       void restartSidecar();
+    }
+    if (saved.hotkey !== previous.hotkey || saved.pressStyle !== previous.pressStyle) {
+      registerConfiguredHotkey();
     }
     return saved;
   });
@@ -260,6 +420,7 @@ app.whenReady().then(() => {
   registerIpcHandlers();
   conversation.setMode(getSettings().defaultMode);
   createOverlay();
+  registerConfiguredHotkey();
   sidecarManager.start();
   void sidecarManager.ensureHealthy().catch(() => {
     showSidecarError('Local audio service could not be started. Check Settings.');
@@ -277,6 +438,9 @@ app.on('window-all-closed', () => {
 app.on('before-quit', (event) => {
   if (quitting) return;
   event.preventDefault();
+  clearListenTimeout();
+  unregisterHotkey();
+  globalShortcut.unregisterAll();
   void sidecarManager.stop().finally(() => {
     quitting = true;
     app.quit();

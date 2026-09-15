@@ -193,10 +193,33 @@ button {
   color: #9facaa;
 }
 
-.error {
+.error-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin: 0 16px 10px;
+}
+
+.error-row[hidden] {
+  display: none;
+}
+
+.error {
+  flex: 1;
+  margin: 0;
   color: #f0a0a0;
   font-size: 11px;
+}
+
+.error-row button {
+  border: 1px solid rgb(240 128 128 / 35%);
+  border-radius: 7px;
+  padding: 5px 9px;
+  background: rgb(240 128 128 / 8%);
+  color: #efaaaa;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 650;
 }
 
 .controls {

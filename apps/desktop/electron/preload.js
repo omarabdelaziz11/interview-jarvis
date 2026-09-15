@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('jarvis', {
   clearConversation: () => ipcRenderer.invoke('clear-conversation'),
   toggleMute: () => ipcRenderer.invoke('toggle-mute'),
   copyLast: () => ipcRenderer.invoke('copy-last'),
+  retryTurn: () => ipcRenderer.invoke('retry-turn'),
   hide: () => ipcRenderer.invoke('hide-overlay'),
   openSettings: () => ipcRenderer.invoke('open-settings'),
   getSettings: () => ipcRenderer.invoke('settings-get'),
