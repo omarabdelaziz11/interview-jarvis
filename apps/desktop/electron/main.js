@@ -212,7 +212,7 @@ async function scanPrimaryScreen() {
       model: 'gpt-4o',
       system: systemForScreenScan(),
       prompt:
-        'Read the entire screenshot, including sidebars and numbered question lists. Answer every interview question you can see. If there are multiple, number the answers to match the on-screen numbering. Reply with only the answers.',
+        'Read the entire screenshot, including sidebars, numbered question lists, and any coding exercise or starter-code challenge. If it is a coding exercise, provide a working solution with code. If it is interview Q&A, answer every question and number answers to match the screen. Reply with only the answers or solution.',
       dataUrl,
       detail: 'high',
     });
