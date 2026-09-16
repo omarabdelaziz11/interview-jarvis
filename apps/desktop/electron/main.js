@@ -561,6 +561,9 @@ function createOverlay() {
     transparent: true,
     alwaysOnTop: true,
     skipTaskbar: true,
+    // Do not activate/steal focus — keeps Meet/Zoom/browser fullscreen when clicking Scan/Listen.
+    focusable: false,
+    fullscreenable: false,
     resizable: true,
     show: false,
     webPreferences: secureWebPreferences(),
@@ -569,10 +572,19 @@ function createOverlay() {
   overlay.setAlwaysOnTop(true, 'screen-saver');
   overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   overlay.setContentProtection(true);
+  overlay.setFocusable(false);
   lockWindowNavigation(overlay);
+
+  // If anything tries to activate us, drop focus so the interview app stays foreground.
+  overlay.on('focus', () => {
+    if (overlay && !overlay.isDestroyed()) {
+      overlay.blur();
+    }
+  });
+
   overlay.webContents.on('did-finish-load', () => {
     sendState();
-    overlay.show();
+    overlay.showInactive();
   });
   overlay.on('closed', () => {
     overlay = null;
@@ -587,12 +599,13 @@ function createSettingsWindow() {
     return;
   }
 
+  // Settings needs keyboard focus (API key). Opening it may leave browser fullscreen —
+  // that is expected; Scan/Listen on the overlay do not.
   settingsWindow = new BrowserWindow({
     width: 640,
     height: 760,
     minWidth: 520,
     minHeight: 600,
-    parent: overlay || undefined,
     show: false,
     title: 'Jarvis Settings',
     webPreferences: secureWebPreferences(),

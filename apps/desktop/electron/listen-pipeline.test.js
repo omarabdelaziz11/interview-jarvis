@@ -6,7 +6,10 @@ const {
   buildListenStartBody,
   releasePendingListenStart,
   createListenHandlers,
+  joinTranscript,
   MAX_LISTEN_SECONDS,
+  JARVIS_SILENCE_MS,
+  INTERVIEW_SILENCE_MS,
 } = require('./listen-pipeline');
 
 describe('listen-pipeline helpers', () => {
@@ -16,6 +19,12 @@ describe('listen-pipeline helpers', () => {
     assert.equal(canStartListen('listening'), false);
     assert.equal(canStartListen('thinking'), false);
     assert.equal(canStartListen('speaking'), false);
+  });
+
+  it('joinTranscript appends continuation fragments', () => {
+    assert.equal(joinTranscript('', 'hello'), 'hello');
+    assert.equal(joinTranscript('hello', 'there'), 'hello there');
+    assert.equal(joinTranscript('hello ', '  there'), 'hello there');
   });
 
   it('buildListenStartBody forwards device IDs and max_seconds', () => {
@@ -29,7 +38,7 @@ describe('listen-pipeline helpers', () => {
         loopback_device_id: 'loop-2',
         max_seconds: MAX_LISTEN_SECONDS,
         endpointing: false,
-        silence_ms: 900,
+        silence_ms: JARVIS_SILENCE_MS,
         min_speech_ms: 250,
       },
     );
@@ -43,7 +52,7 @@ describe('listen-pipeline helpers', () => {
     );
   });
 
-  it('interview mode forces mic off and uses resolved loopback', () => {
+  it('interview mode forces mic off and uses longer silence', () => {
     assert.deepEqual(
       buildListenStartBody(
         { micDeviceId: 21, loopbackDeviceId: 16 },
@@ -54,7 +63,7 @@ describe('listen-pipeline helpers', () => {
         loopback_device_id: 'pyaudio:13',
         max_seconds: MAX_LISTEN_SECONDS,
         endpointing: false,
-        silence_ms: 1200,
+        silence_ms: INTERVIEW_SILENCE_MS,
         min_speech_ms: 350,
       },
     );
@@ -131,7 +140,7 @@ describe('createListenHandlers', () => {
         loopback_device_id: 'loop-b',
         max_seconds: 42,
         endpointing: false,
-        silence_ms: 900,
+        silence_ms: JARVIS_SILENCE_MS,
         min_speech_ms: 250,
       },
     ]);

@@ -1,4 +1,13 @@
 const MAX_LISTEN_SECONDS = 180;
+/** Pause before treating speech as finished (was 0.9–1.2s; too eager on natural hesitations). */
+const JARVIS_SILENCE_MS = 2200;
+const INTERVIEW_SILENCE_MS = 3000;
+/**
+ * After a long silence endpoint, wait this long for speech to resume.
+ * If it does, keep listening and append to the same unanswered turn.
+ */
+const CONTINUATION_PROBE_MS = 1500;
+
 const { sidecarErrorMessage, OVERLAY_ERRORS } = require('./errors');
 
 function canStartListen(status) {
@@ -7,6 +16,14 @@ function canStartListen(status) {
 
 function isWasapiLoopbackId(id) {
   return typeof id === 'string' && id.startsWith('pyaudio:');
+}
+
+function joinTranscript(existing, next) {
+  const left = typeof existing === 'string' ? existing.trim() : '';
+  const right = typeof next === 'string' ? next.trim() : '';
+  if (!left) return right;
+  if (!right) return left;
+  return `${left} ${right}`;
 }
 
 async function resolveInterviewLoopbackId(settings, sidecarClient) {
@@ -47,7 +64,7 @@ function buildListenStartBody(settings, options = {}) {
     loopback_device_id: interview ? loopbackDeviceId : settings.loopbackDeviceId,
     max_seconds: maxSeconds,
     endpointing: Boolean(endpointing),
-    silence_ms: interview ? 1200 : 900,
+    silence_ms: interview ? INTERVIEW_SILENCE_MS : JARVIS_SILENCE_MS,
     min_speech_ms: interview ? 350 : 250,
   };
 }
@@ -65,6 +82,7 @@ function createListenHandlers(state, deps) {
     showSidecarError,
     runTurn,
     maxSeconds = MAX_LISTEN_SECONDS,
+    continuationProbeMs = CONTINUATION_PROBE_MS,
     setTimeoutFn = setTimeout,
     clearTimeoutFn = clearTimeout,
     sleepFn = (ms) => new Promise((resolve) => setTimeoutFn(resolve, ms)),
@@ -86,14 +104,14 @@ function createListenHandlers(state, deps) {
     return sessionActive && generation === sessionGeneration;
   }
 
-  async function startListen({ endpointing = false } = {}) {
+  async function startListen({ endpointing = false, clearHeard = true } = {}) {
     if (!canStartListen(state.status) && !endpointing) return;
     if (endpointing && state.status === 'thinking') return;
 
     clearListenTimeout();
     state.status = 'listening';
     state.error = null;
-    state.heard = null;
+    if (clearHeard) state.heard = null;
     state.lastTurnFailed = false;
     sendState();
 
@@ -174,6 +192,129 @@ function createListenHandlers(state, deps) {
     }
   }
 
+  /**
+   * After an endpoint silence, briefly listen for speech to resume.
+   * @returns {'resumed'|'done'|'ended'}
+   */
+  async function probeForContinuation(generation) {
+    await startListen({ endpointing: true, clearHeard: false });
+    if (!isSessionCurrent(generation)) {
+      try {
+        await stopListen({ skipTurn: true });
+      } catch {
+        /* ignore */
+      }
+      return 'ended';
+    }
+
+    const deadline = Date.now() + continuationProbeMs;
+    while (isSessionCurrent(generation) && Date.now() < deadline) {
+      let status;
+      try {
+        status = await sidecarClient.listenStatus();
+      } catch {
+        await sleepFn(100);
+        continue;
+      }
+
+      if (!status?.recording) {
+        return 'done';
+      }
+      if (status.speech_detected) {
+        await waitForUtterance(generation);
+        return isSessionCurrent(generation) ? 'resumed' : 'ended';
+      }
+      await sleepFn(100);
+    }
+
+    if (!isSessionCurrent(generation)) {
+      try {
+        await stopListen({ skipTurn: true });
+      } catch {
+        /* ignore */
+      }
+      return 'ended';
+    }
+
+    try {
+      await stopListen({ skipTurn: true });
+    } catch {
+      /* ignore */
+    }
+    return 'done';
+  }
+
+  async function collectTranscriptWithContinuations(generation) {
+    let pending = '';
+
+    while (isSessionCurrent(generation)) {
+      await startListen({ endpointing: true, clearHeard: !pending });
+      if (!isSessionCurrent(generation)) {
+        try {
+          await stopListen({ skipTurn: true });
+        } catch {
+          /* session ending */
+        }
+        break;
+      }
+
+      await waitForUtterance(generation);
+      if (!isSessionCurrent(generation)) {
+        try {
+          await stopListen({ skipTurn: true });
+        } catch {
+          /* session ending */
+        }
+        break;
+      }
+
+      clearListenTimeout();
+      if (listenStartRequest) await listenStartRequest;
+      const result = await sidecarClient.listenStop();
+      if (!isSessionCurrent(generation)) break;
+
+      const text = typeof result?.text === 'string' ? result.text.trim() : '';
+      if (text) {
+        pending = joinTranscript(pending, text);
+        state.heard = pending;
+        state.status = 'listening';
+        state.error = null;
+        sendState();
+      }
+
+      if (!pending) {
+        state.status = 'listening';
+        sendState();
+        return '';
+      }
+
+      const probe = await probeForContinuation(generation);
+      if (probe === 'ended' || probe === 'done') break;
+
+      if (!isSessionCurrent(generation)) {
+        try {
+          await stopListen({ skipTurn: true });
+        } catch {
+          /* ignore */
+        }
+        break;
+      }
+      clearListenTimeout();
+      if (listenStartRequest) await listenStartRequest;
+      const continued = await sidecarClient.listenStop();
+      if (!isSessionCurrent(generation)) break;
+      const more = typeof continued?.text === 'string' ? continued.text.trim() : '';
+      if (more) {
+        pending = joinTranscript(pending, more);
+        state.heard = pending;
+        state.status = 'listening';
+        sendState();
+      }
+    }
+
+    return pending;
+  }
+
   async function runContinuousSession(generation) {
     while (isSessionCurrent(generation)) {
       try {
@@ -181,35 +322,10 @@ function createListenHandlers(state, deps) {
           await sleepFn(100);
           continue;
         }
-        await startListen({ endpointing: true });
-        if (!isSessionCurrent(generation)) {
-          try {
-            await stopListen({ skipTurn: true });
-          } catch {
-            /* session ending */
-          }
-          break;
-        }
-        await waitForUtterance(generation);
-        if (!isSessionCurrent(generation)) {
-          try {
-            await stopListen({ skipTurn: true });
-          } catch {
-            /* session ending */
-          }
-          break;
-        }
 
-        state.status = 'thinking';
-        state.error = null;
-        clearListenTimeout();
-        sendState();
-
-        if (listenStartRequest) await listenStartRequest;
-        const result = await sidecarClient.listenStop();
+        const text = await collectTranscriptWithContinuations(generation);
         if (!isSessionCurrent(generation)) break;
 
-        const text = typeof result?.text === 'string' ? result.text.trim() : '';
         if (!text) {
           state.status = 'listening';
           state.error = null;
@@ -310,10 +426,14 @@ function createListenHandlers(state, deps) {
 
 module.exports = {
   MAX_LISTEN_SECONDS,
+  JARVIS_SILENCE_MS,
+  INTERVIEW_SILENCE_MS,
+  CONTINUATION_PROBE_MS,
   canStartListen,
   buildListenStartBody,
   releasePendingListenStart,
   resolveInterviewLoopbackId,
   isWasapiLoopbackId,
+  joinTranscript,
   createListenHandlers,
 };
