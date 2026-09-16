@@ -103,7 +103,7 @@ TTS / **Mute** are disabled in this build (text-only replies).
 **Jarvis mode:** hears mic (and system audio if configured).  
 **Interview mode:** mic off; system/loopback only. Use **Listen** for spoken questions and **Scan screen** for on-screen question lists.
 
-Continuous listen waits ~3s of silence in Interview (~2.2s in Jarvis) before answering. If the speaker continues after a short pause, the app keeps listening and **appends** that speech to the same unanswered turn before calling the model.
+Continuous listen waits ~2.2s of silence before answering. If the speaker continues after a short pause, the app keeps listening and **appends** that speech to the same unanswered turn before calling the model.
 
 The overlay is **non-focusable**: clicking Scan/Listen/etc. should not steal focus from a fullscreen browser or meeting app. Opening **Settings** still takes focus (needed for typing).
 

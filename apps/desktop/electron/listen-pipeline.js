@@ -1,7 +1,7 @@
 const MAX_LISTEN_SECONDS = 180;
 /** Pause before treating speech as finished (was 0.9–1.2s; too eager on natural hesitations). */
 const JARVIS_SILENCE_MS = 2200;
-const INTERVIEW_SILENCE_MS = 3000;
+const INTERVIEW_SILENCE_MS = 2200;
 /**
  * After a long silence endpoint, wait this long for speech to resume.
  * If it does, keep listening and append to the same unanswered turn.
