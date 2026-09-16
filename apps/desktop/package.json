@@ -5,6 +5,7 @@
   "main": "electron/main.js",
   "scripts": {
     "start": "electron .",
+    "start:hidden": "cscript //nologo start-hidden.vbs",
     "test": "node --test electron/*.test.js",
     "test:sidecar-manager": "node --test electron/sidecar-manager.test.js"
   },

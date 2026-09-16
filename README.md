@@ -48,6 +48,16 @@ npm start
 
 `npm start` launches Electron and starts/supervises the Python sidecar automatically (default path: `services\sidecar\.venv\Scripts\python.exe`).
 
+### Start without a terminal window (Windows)
+
+`npm start` always keeps a console open. To run the overlay with **no terminal**:
+
+- Double-click **`Start Jarvis.vbs`** in the repo root, or  
+- Double-click **`apps\desktop\start-hidden.vbs`**, or  
+- From `apps\desktop`: `npm run start:hidden`
+
+Quit with the overlay **×** button (same as before). You can also pin a shortcut to `Start Jarvis.vbs` on your desktop/taskbar.
+
 ### 3. Configure
 
 1. Open **Settings** in the overlay  
