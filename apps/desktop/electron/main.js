@@ -1,17 +1,28 @@
-const { app, BrowserWindow, clipboard, globalShortcut, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, screen } = require('electron');
 const path = require('path');
 
 const sidecarClient = require('./sidecar-client');
 const { SidecarManager } = require('./sidecar-manager');
 const { getSettings, saveSettings } = require('./settings');
-const { toPublicSettings } = require('./public-settings');
+const { toPublicSettings, mergeKnowledgeMeta } = require('./public-settings');
 const conversation = require('./conversation');
 const openaiClient = require('./openai-client');
-const { systemFor, systemForScreenScan } = require('./prompts');
+const { systemFor, systemForScreenScan, withKnowledge } = require('./prompts');
 const { createListenHandlers } = require('./listen-pipeline');
 const { OVERLAY_ERRORS, openAiErrorMessage } = require('./errors');
 const tts = require('./tts');
 const { capturePrimaryScreenPngDataUrl } = require('./screen-capture');
+const {
+  extractPdfText,
+  saveKnowledge,
+  clearKnowledge,
+  getKnowledgeText,
+  getKnowledgeMeta,
+} = require('./knowledge');
+
+function publicSettingsSnapshot() {
+  return mergeKnowledgeMeta(toPublicSettings(getSettings()), getKnowledgeMeta());
+}
 
 /** Text-only mode: TTS UI removed; keep false until speech is productized again. */
 const TTS_ENABLED = false;
@@ -210,9 +221,9 @@ async function scanPrimaryScreen() {
     // gpt-4o + low ≈ 85 image tokens but often misses dense sidebar lists unless zoomed.
     const { answer, usage } = await openaiClient.chatWithImage(client, {
       model: 'gpt-4o',
-      system: systemForScreenScan(),
+      system: withKnowledge(systemForScreenScan(), getKnowledgeText()),
       prompt:
-        'Read the entire screenshot, including sidebars, numbered question lists, and any coding exercise or starter-code challenge. If it is a coding exercise, provide a working solution with code. If it is interview Q&A, answer every question and number answers to match the screen. Reply with only the answers or solution.',
+        'Read the entire screenshot. Answer anything that needs a response: open questions, numbered lists, coding exercises, multiple-choice / choose-the-correct-statement items (even without a "?"), true/false, or fill-in blanks. For MCQs give the correct option letter/number and its text. For coding exercises include working code. For question lists, number answers to match the screen. Use the knowledge document when the on-screen item relates to the candidate\'s product/architecture. Reply with only the answers or solution.',
       dataUrl,
       detail: 'high',
     });
@@ -374,7 +385,7 @@ async function runTurn(transcript) {
     const client = openaiClient.createClient(settings.apiKey);
     const answer = await openaiClient.chat(client, {
       model: settings.model,
-      system: systemFor(conversation.getMode()),
+      system: withKnowledge(systemFor(conversation.getMode()), getKnowledgeText()),
       messages: conversation.getMessages(),
     });
     if (!answer) {
@@ -504,7 +515,7 @@ function registerIpcHandlers() {
 
   ipcMain.handle('settings-get', (event) => {
     if (!isSettingsSender(event)) throw new Error('Unauthorized settings request');
-    return toPublicSettings(getSettings());
+    return publicSettingsSnapshot();
   });
 
   ipcMain.handle('settings-save', async (event, partial) => {
@@ -523,7 +534,35 @@ function registerIpcHandlers() {
     if (!saved.ttsEnabled && previous.ttsEnabled) {
       stopSpeech();
     }
-    return toPublicSettings(saved);
+    return publicSettingsSnapshot();
+  });
+
+  ipcMain.handle('knowledge-pick', async (event) => {
+    if (!isSettingsSender(event)) throw new Error('Unauthorized knowledge request');
+    const parent = settingsWindow && !settingsWindow.isDestroyed() ? settingsWindow : undefined;
+    const result = await dialog.showOpenDialog(parent, {
+      title: 'Choose knowledge PDF',
+      properties: ['openFile'],
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    });
+    if (result.canceled || !result.filePaths?.[0]) {
+      return publicSettingsSnapshot();
+    }
+    try {
+      const extracted = await extractPdfText(result.filePaths[0]);
+      saveKnowledge(extracted);
+      return publicSettingsSnapshot();
+    } catch (error) {
+      const message = error?.message || 'Could not read PDF';
+      const err = new Error(message);
+      throw err;
+    }
+  });
+
+  ipcMain.handle('knowledge-clear', (event) => {
+    if (!isSettingsSender(event)) throw new Error('Unauthorized knowledge request');
+    clearKnowledge();
+    return publicSettingsSnapshot();
   });
 
   ipcMain.handle('sidecar-devices', async (event) => {

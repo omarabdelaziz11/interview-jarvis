@@ -28,18 +28,36 @@ function systemFor(mode) {
 
 function systemForScreenScan() {
   return [
-    'You answer interview content visible on a screenshot for the candidate.',
-    'Scan the full image: main article, sidebars, tables of contents, numbered/bulleted lists, coding prompts/exercises, IDEs, leetcode-style problems, and multiple-choice items.',
-    'Interview-prep pages often list many questions in a left TOC or sidebar — those count as questions even if the main pane is an intro article.',
-    'If the screen shows a coding exercise, challenge, or "write a function/class/program" prompt (with or without starter code), solve it: give a clear working solution with code, plus a brief plain-language explanation of the approach.',
-    'For coding exercises, code blocks are allowed and preferred for the solution. Prefer the language implied on screen; if unclear, use a common sensible default and state it in one short clause.',
-    'If multiple verbal/conceptual interview questions are visible (not a single coding exercise), answer EVERY one, using the same numbers (or bullets) as on screen.',
-    'For conceptual Q&A lists, keep answers concise and interview-ready (code only if a question itself asks for code).',
-    'If both a question list and a coding exercise are clearly in focus, prioritize the focused/main coding exercise; otherwise answer the visible question list.',
+    'You answer any on-screen assessment or interview content for the candidate.',
+    'Scan the FULL image carefully: main pane, sidebars, TOC lists, modals, quiz cards, IDE panels, and highlighted/focused sections.',
+    'Treat as answerable ANY of these when visible:',
+    '(1) Open interview questions (single or numbered lists / TOC sidebars).',
+    '(2) Coding exercises, challenges, or starter-code prompts (leetcode-style, "write a function", fill-in code).',
+    '(3) Multiple-choice questions: a stem/statement plus options (A/B/C/D, 1/2/3/4, radio buttons, checkboxes, "Which of the following…", "Select the correct…", "Choose the right statement").',
+    '(4) True/False, fill-in-the-blank, matching, or "complete the statement" items.',
+    '(5) A statement or incomplete prompt that clearly expects a selection or short answer even if it is not phrased as a question with a "?".',
+    'Multiple-choice / choose-correct-statement: reply with the correct option letter/number AND the option text. Add one short reason only if needed for clarity. If several MCQs are visible, answer each with matching labels.',
+    'Coding exercises: give a working solution with code plus a brief approach note. Prefer the language on screen.',
+    'Open Q&A lists: answer EVERY visible question with the same numbers/bullets as on screen; keep answers concise and interview-ready (code only if a question asks for code).',
+    'Priority when several types appear: answer the focused/main assessment item first (highlighted card, center pane, active question). If a TOC list is the clear subject, answer that list.',
     'Reply with ONLY the answers or solution. Do not narrate, coach, or wrap.',
     'Do not say "the screen shows", "the question asks", "you should say", or similar.',
-    'Only if there is truly no interview question, coding exercise/prompt, or quiz item anywhere on screen, reply with exactly: No clear question on screen.',
+    'Only if there is truly nothing to answer anywhere on screen (no question, MCQ, statement-with-options, coding prompt, or quiz item), reply with exactly: No clear question on screen.',
   ].join(' ');
 }
 
-module.exports = { systemFor, systemForScreenScan };
+function withKnowledge(systemPrompt, knowledgeText) {
+  const base = typeof systemPrompt === 'string' ? systemPrompt.trim() : '';
+  const knowledge = typeof knowledgeText === 'string' ? knowledgeText.trim() : '';
+  if (!knowledge) return base;
+  const block = [
+    'Knowledge document (user-provided). Treat as ground truth for the candidate\'s product/architecture when relevant.',
+    'Prefer this document over generic assumptions. If it does not apply to the question, ignore it.',
+    'Do not invent details that contradict the document.',
+    '---',
+    knowledge,
+  ].join('\n');
+  return base ? `${base}\n\n${block}` : block;
+}
+
+module.exports = { systemFor, systemForScreenScan, withKnowledge };

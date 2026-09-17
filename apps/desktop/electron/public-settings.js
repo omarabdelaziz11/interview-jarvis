@@ -7,4 +7,11 @@ function toPublicSettings(settings) {
   };
 }
 
-module.exports = { toPublicSettings };
+function mergeKnowledgeMeta(publicSettings, knowledgeMeta) {
+  return {
+    ...publicSettings,
+    ...(knowledgeMeta && typeof knowledgeMeta === 'object' ? knowledgeMeta : {}),
+  };
+}
+
+module.exports = { toPublicSettings, mergeKnowledgeMeta };

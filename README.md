@@ -68,6 +68,8 @@ Quit with the overlay **×** button (same as before). You can also pin a shortcu
 
 The API key is encrypted with Electron `safeStorage` (Windows DPAPI) under your user profile. You can also set `OPENAI_API_KEY` in the environment instead of saving it in Settings.
 
+Optional: in Settings → **Knowledge PDF**, choose one architecture/docs PDF. Its text is stored locally and included in Jarvis + Interview prompts (Listen and Scan) while loaded. Clear removes it. Oversized PDFs are truncated (~100k characters).
+
 ## Overlay controls
 
 ### Mode chips (header)
@@ -82,7 +84,7 @@ The API key is encrypted with Electron `safeStorage` (Windows DPAPI) under your 
 | Button | Modes | What it does |
 |--------|-------|----------------|
 | **Listen** / **Listening** | All | Same as the global hotkey. Arms or disarms continuous listening (or follows Settings **Press style**: always-listen, hold, or one-shot toggle). Label shows **Listening** while a session is armed. |
-| **Scan screen** | Interview only | Captures primary monitor (≤1400px JPEG), sends to `gpt-4o` with vision `detail: high` (**~1k image tokens**, not ~35k on mini). Reads sidebar question lists without zoom; numbered lists get numbered answers. |
+| **Scan screen** | Interview only | Captures primary monitor (≤1400px JPEG), sends to `gpt-4o` with vision `detail: high` (**~1k image tokens**, not ~35k on mini). Answers open questions, MCQs / choose-correct-statement, coding exercises, and numbered lists. |
 | **Clear** | All | Clears the conversation history in the overlay. |
 | **Copy** | All | Copies the last assistant reply to the clipboard. |
 | **Settings** | All | Opens the settings window (API key, devices, hotkey, models, sidecar Python path). |
@@ -144,7 +146,7 @@ Whisper models are capped to `tiny` / `base` / `small` in Settings to avoid acci
 
 - **Not in git:** API keys, AppData settings, `.venv`, `node_modules`, `.env`, local audio dumps, `.worktrees/`  
 - **In AppData (local only):** `%APPDATA%\jarvis-desktop\jarvis-settings.json` (encrypted key + preferences)  
-- Audio transcripts and screen-scan images are sent to OpenAI when you use those features  
+- Audio transcripts, screen-scan images, and (when loaded) Knowledge PDF text are sent to OpenAI when you use those features
 
 ## Development tests
 

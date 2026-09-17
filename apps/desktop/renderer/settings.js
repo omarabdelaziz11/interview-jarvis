@@ -1,6 +1,9 @@
 const form = document.querySelector('#settings-form');
 const statusElement = document.querySelector('#form-status');
 const refreshButton = document.querySelector('#refresh-devices');
+const knowledgeStatus = document.querySelector('#knowledge-status');
+const knowledgePickButton = document.querySelector('#knowledge-pick');
+const knowledgeClearButton = document.querySelector('#knowledge-clear');
 const fields = {
   apiKey: document.querySelector('#api-key'),
   model: document.querySelector('#model'),
@@ -110,6 +113,19 @@ async function loadDevices(selected = {}) {
   }
 }
 
+function renderKnowledge(settings) {
+  if (!knowledgeStatus) return;
+  if (!settings?.hasKnowledgePdf) {
+    knowledgeStatus.textContent = 'No PDF loaded.';
+    if (knowledgeClearButton) knowledgeClearButton.disabled = true;
+    return;
+  }
+  const count = Number(settings.knowledgePdfCharCount) || 0;
+  const truncated = settings.knowledgePdfTruncated ? ' (truncated to cap)' : '';
+  knowledgeStatus.textContent = `Loaded: ${settings.knowledgePdfName} — ${count.toLocaleString()} characters${truncated}`;
+  if (knowledgeClearButton) knowledgeClearButton.disabled = false;
+}
+
 function renderSettings(settings) {
   fields.apiKey.value = '';
   fields.apiKey.placeholder = settings.hasApiKey ? 'Saved securely — enter a new key to replace' : '';
@@ -122,6 +138,7 @@ function renderSettings(settings) {
     fields.ttsEnabled.checked = Boolean(settings.ttsEnabled);
   }
   fields.sidecarPython.value = settings.sidecarPython || '';
+  renderKnowledge(settings);
 }
 
 async function initialize() {
@@ -175,5 +192,38 @@ fields.hotkey.addEventListener('keydown', (event) => {
   const accelerator = acceleratorFromKeyboardEvent(event);
   if (accelerator) fields.hotkey.value = accelerator;
 });
+
+if (knowledgePickButton) {
+  knowledgePickButton.addEventListener('click', async () => {
+    knowledgePickButton.disabled = true;
+    setStatus('Reading PDF…');
+    try {
+      const settings = await window.jarvis.pickKnowledgePdf();
+      renderKnowledge(settings);
+      setStatus(
+        settings.hasKnowledgePdf ? 'Knowledge PDF loaded.' : 'No PDF selected.',
+      );
+    } catch (error) {
+      setStatus(error?.message || 'Could not load PDF.', true);
+    } finally {
+      knowledgePickButton.disabled = false;
+    }
+  });
+}
+
+if (knowledgeClearButton) {
+  knowledgeClearButton.addEventListener('click', async () => {
+    knowledgeClearButton.disabled = true;
+    try {
+      const settings = await window.jarvis.clearKnowledgePdf();
+      renderKnowledge(settings);
+      setStatus('Knowledge PDF cleared.');
+    } catch (error) {
+      setStatus(error?.message || 'Could not clear PDF.', true);
+    } finally {
+      knowledgeClearButton.disabled = false;
+    }
+  });
+}
 
 initialize();

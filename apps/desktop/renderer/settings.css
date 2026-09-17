@@ -79,6 +79,20 @@ label {
   line-height: 1.4;
 }
 
+.knowledge-status {
+  margin: 0;
+  color: #c5d4d2;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 input,
 select,
 button {

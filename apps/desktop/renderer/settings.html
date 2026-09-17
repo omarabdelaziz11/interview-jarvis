@@ -94,6 +94,19 @@
           <button id="refresh-devices" class="secondary" type="button">Refresh devices</button>
         </section>
 
+        <section>
+          <h2>Knowledge PDF</h2>
+          <p class="hint">
+            Optional architecture/docs PDF used as ground truth in Jarvis and Interview (Listen + Scan).
+            Text is stored locally and sent to OpenAI with each request while loaded.
+          </p>
+          <p id="knowledge-status" class="knowledge-status">No PDF loaded.</p>
+          <div class="button-row">
+            <button id="knowledge-pick" class="secondary" type="button">Choose PDF</button>
+            <button id="knowledge-clear" class="secondary" type="button">Clear</button>
+          </div>
+        </section>
+
         <footer>
           <p id="form-status" role="status" aria-live="polite"></p>
           <button type="submit">Save settings</button>

@@ -41,5 +41,7 @@ contextBridge.exposeInMainWorld('jarvis', {
   openSettings: () => ipcRenderer.invoke('open-settings'),
   getSettings: () => ipcRenderer.invoke('settings-get'),
   saveSettings: (settings) => ipcRenderer.invoke('settings-save', settings),
+  pickKnowledgePdf: () => ipcRenderer.invoke('knowledge-pick'),
+  clearKnowledgePdf: () => ipcRenderer.invoke('knowledge-clear'),
   getDevices: () => ipcRenderer.invoke('sidecar-devices'),
 });
